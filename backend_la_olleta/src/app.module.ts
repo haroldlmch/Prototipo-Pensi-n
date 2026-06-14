@@ -14,6 +14,7 @@ import { ConsumosModule } from './consumos/consumos.module';
 import { ExtrasModule } from './extras/extras.module';
 import { VentasCasualesModule } from './ventas-casuales/ventas-casuales.module';
 import { AuthModule } from './auth/auth.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { AuthModule } from './auth/auth.module';
     ExtrasModule,
     VentasCasualesModule,
     AuthModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

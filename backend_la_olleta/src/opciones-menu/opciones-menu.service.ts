@@ -93,24 +93,39 @@ return opcionMenu;
 }
 
 async update(
-id: number,
-updateOpcionesMenuDto: UpdateOpcionesMenuDto,
+  id: number,
+  updateOpcionesMenuDto: UpdateOpcionesMenuDto,
 ) {
 
+  const opcionMenu =
+    await this.findOne(id);
 
-const opcionMenu =
-  await this.findOne(id);
+  if (updateOpcionesMenuDto.nombreSegundo) {
+    opcionMenu.nombreSegundo =
+      updateOpcionesMenuDto.nombreSegundo;
+  }
 
-if (updateOpcionesMenuDto.nombreSegundo) {
-  opcionMenu.nombreSegundo =
-    updateOpcionesMenuDto.nombreSegundo;
-}
+  if (updateOpcionesMenuDto.idMenu) {
 
-return await this.opcionesMenuRepository.save(
-  opcionMenu,
-);
+    const menu =
+      await this.menuRepository.findOne({
+        where: {
+          id: updateOpcionesMenuDto.idMenu,
+        },
+      });
 
+    if (!menu) {
+      throw new NotFoundException(
+        'Menú no encontrado',
+      );
+    }
 
+    opcionMenu.menu = menu;
+  }
+
+  return await this.opcionesMenuRepository.save(
+    opcionMenu,
+  );
 }
 
 async remove(id: number) {

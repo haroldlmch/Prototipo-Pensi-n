@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
@@ -10,11 +10,25 @@ import InputText from 'primevue/inputtext';
 import api from '../api/axios';
 
 const menus = ref<any[]>([]);
+const busquedaFecha = ref('');
+
+const menusFiltrados = computed(() => {
+  if (!busquedaFecha.value.trim()) return menus.value;
+  return menus.value.filter((menu) => {
+    const fechaFormateada = formatFecha(menu.fecha);
+    return fechaFormateada.toLowerCase().includes(busquedaFecha.value.toLowerCase());
+  });
+});
 
 const visible = ref(false);
 
 const modoEdicion = ref(false);
 const menuId = ref<number | null>(null);
+
+const mostrarConfirmarEliminar = ref(false);
+const idAEliminar = ref<number | null>(null);
+const mensajeEliminar = ref('');
+const eliminando = ref(false);
 
 const fecha = ref('');
 const sopa = ref('');
@@ -38,19 +52,23 @@ const editarMenu = (menu: any) => {
   visible.value = true;
 };
 
-const eliminarMenu = async (id: number) => {
-  const confirmar = confirm(
-    '¿Eliminar menú?',
-  );
+const confirmarEliminar = (id: number) => {
+  idAEliminar.value = id;
+  mensajeEliminar.value = '¿Desea eliminar este menú? Esta acción no se puede deshacer.';
+  mostrarConfirmarEliminar.value = true;
+};
 
-  if (!confirmar) return;
-
+const eliminarMenuConfirmado = async () => {
+  if (idAEliminar.value === null) return;
+  eliminando.value = true;
   try {
-    await api.delete(`/menus/${id}`);
-
+    await api.delete(`/menus/${idAEliminar.value}`);
+    mostrarConfirmarEliminar.value = false;
     await cargarMenus();
   } catch (error) {
     console.error(error);
+  } finally {
+    eliminando.value = false;
   }
 };
 
@@ -147,6 +165,27 @@ onMounted(() => {
       />
     </div>
 
+    <!-- Buscador -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <i class="pi pi-search" style="color: #94a3b8;"></i>
+        <InputText
+          v-model="busquedaFecha"
+          placeholder="Buscar por fecha..."
+          style="padding: 0.75rem 1rem; flex: 1;"
+          fluid
+        />
+      </div>
+    </div>
+
     <!-- Contenedor Tabla -->
     <div
       style="
@@ -158,18 +197,13 @@ onMounted(() => {
       "
     >
       <DataTable
-        :value="menus"
+        :value="menusFiltrados"
         stripedRows
         paginator
         :rows="10"
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-        <Column
-          field="id"
-          header="ID"
-          style="width: 80px;"
-        />
 
         <Column
           header="Fecha"
@@ -202,7 +236,7 @@ onMounted(() => {
               severity="danger"
               text
               rounded
-              @click="eliminarMenu(slotProps.data.id)"
+              @click="confirmarEliminar(slotProps.data.id)"
             />
           </template>
         </Column>
@@ -261,6 +295,45 @@ onMounted(() => {
           fluid
           @click="guardarMenu"
         />
+      </div>
+    </Dialog>
+
+    <!-- Dialogo de Confirmación de Eliminación -->
+    <Dialog
+      v-model:visible="mostrarConfirmarEliminar"
+      modal
+      header="Confirmar Eliminación"
+      :style="{ width: '400px' }"
+      :closable="false"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.5rem; align-items: center; text-align: center; padding-top: 0.5rem;">
+        <div style="background: #fee2e2; color: #dc2626; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+          <i class="pi pi-exclamation-triangle" style="font-size: 1.75rem;"></i>
+        </div>
+        <div>
+          <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
+            ¿Estás seguro?
+          </h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.5;">
+            {{ mensajeEliminar }}
+          </p>
+        </div>
+        <div style="display: flex; gap: 1rem; width: 100%; margin-top: 0.5rem;">
+          <Button
+            label="Cancelar"
+            severity="secondary"
+            text
+            style="flex: 1; padding: 0.75rem;"
+            @click="mostrarConfirmarEliminar = false"
+          />
+          <Button
+            label="Eliminar"
+            severity="danger"
+            style="flex: 1; padding: 0.75rem;"
+            :loading="eliminando"
+            @click="eliminarMenuConfirmado"
+          />
+        </div>
       </div>
     </Dialog>
   </div>

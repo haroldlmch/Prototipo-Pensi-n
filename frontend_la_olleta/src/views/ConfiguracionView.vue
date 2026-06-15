@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from 'vue';
 
 import Button from 'primevue/button';
-import Card from 'primevue/card';
 import InputNumber from 'primevue/inputnumber';
 import Message from 'primevue/message';
 
@@ -114,14 +113,25 @@ const formatearFecha = (valor: string) => {
 };
 
 onMounted(cargarConfiguracion);
-</script>
-
-<template>
-  <div>
+</script><template>
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- Cabecera -->
     <div class="encabezado">
       <div>
-        <h1>Configuración</h1>
-        <p>Valores generales utilizados por el sistema</p>
+        <h1
+          style="
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+          "
+        >
+          Configuración
+        </h1>
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+          Parámetros y precios globales utilizados por el sistema.
+        </p>
       </div>
     </div>
 
@@ -129,98 +139,116 @@ onMounted(cargarConfiguracion);
       v-if="mensaje"
       :severity="tipoMensaje"
       :closable="false"
-      class="mensaje"
     >
       {{ mensaje }}
     </Message>
 
-    <p v-if="cargando">Cargando configuración...</p>
-
-    <div
-      v-else
-      class="cuadricula"
-    >
-      <Card>
-        <template #title>Precios</template>
-        <template #subtitle>Importes predeterminados en bolivianos</template>
-        <template #content>
-          <div class="formulario">
-            <label>
-              Precio para pensionado
-              <InputNumber
-                v-model="precioPensionado"
-                mode="currency"
-                currency="BOB"
-                locale="es-BO"
-                :min="0"
-                fluid
-              />
-            </label>
-
-            <label>
-              Precio para venta casual
-              <InputNumber
-                v-model="precioCasual"
-                mode="currency"
-                currency="BOB"
-                locale="es-BO"
-                :min="0"
-                fluid
-              />
-            </label>
-
-            <label>
-              Precio sugerido para extras
-              <InputNumber
-                v-model="precioExtra"
-                mode="currency"
-                currency="BOB"
-                locale="es-BO"
-                :min="0"
-                fluid
-              />
-            </label>
-          </div>
-        </template>
-      </Card>
-
-      <Card>
-        <template #title>Alertas</template>
-        <template #subtitle>Control de completos disponibles</template>
-        <template #content>
-          <div class="formulario">
-            <label>
-              Alertar cuando el saldo sea igual o menor a
-              <InputNumber
-                v-model="saldoBajoAlerta"
-                :min="0"
-                showButtons
-                fluid
-              />
-            </label>
-
-            <small>
-              Este valor permitirá identificar pensiones próximas a quedarse sin
-              completos.
-            </small>
-          </div>
-        </template>
-      </Card>
+    <!-- Skeleton mientras carga -->
+    <div v-if="cargando" style="display: flex; align-items: center; gap: 0.75rem; color: #64748b; font-size: 0.95rem;">
+      <i class="pi pi-spin pi-spinner" style="font-size: 1.25rem; color: #3b82f6;"></i>
+      Cargando configuración...
     </div>
 
-    <div
-      v-if="!cargando"
-      class="acciones"
-    >
-      <small v-if="fechaActualizacion">
+    <!-- Tarjetas de configuración -->
+    <div v-else class="cuadricula">
+      <!-- Card: Precios -->
+      <div class="config-card">
+        <div class="config-card-header">
+          <div style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-money-bill" style="font-size: 1.1rem;"></i>
+          </div>
+          <div>
+            <h2 class="config-card-title">Precios</h2>
+            <p class="config-card-sub">Importes predeterminados en bolivianos (Bs.)</p>
+          </div>
+        </div>
+
+        <div class="formulario">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Precio por completo para pensionado</label>
+            <InputNumber
+              v-model="precioPensionado"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Precio para venta casual</label>
+            <InputNumber
+              v-model="precioCasual"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Precio sugerido para extras</label>
+            <InputNumber
+              v-model="precioExtra"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Alertas -->
+      <div class="config-card">
+        <div class="config-card-header">
+          <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-bell" style="font-size: 1.1rem;"></i>
+          </div>
+          <div>
+            <h2 class="config-card-title">Alertas</h2>
+            <p class="config-card-sub">Control de completos disponibles</p>
+          </div>
+        </div>
+
+        <div class="formulario">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Alertar cuando el saldo sea igual o menor a</label>
+            <InputNumber
+              v-model="saldoBajoAlerta"
+              :min="0"
+              showButtons
+              fluid
+            />
+          </div>
+
+          <div style="background: #fef9c3; border: 1px solid #fde047; border-radius: 10px; padding: 0.85rem 1rem; display: flex; gap: 0.6rem; align-items: flex-start;">
+            <i class="pi pi-info-circle" style="color: #ca8a04; font-size: 1rem; margin-top: 0.1rem;"></i>
+            <span style="font-size: 0.85rem; color: #92400e; line-height: 1.5;">
+              Las pensiones con completos disponibles iguales o menores a este valor
+              aparecerán como <strong>alertas</strong> en el dashboard.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Acciones -->
+    <div v-if="!cargando" class="acciones">
+      <span v-if="fechaActualizacion" style="color: #94a3b8; font-size: 0.82rem;">
+        <i class="pi pi-clock" style="margin-right: 0.3rem;"></i>
         Última actualización: {{ formatearFecha(fechaActualizacion) }}
-      </small>
+      </span>
 
       <Button
         label="Guardar Configuración"
         icon="pi pi-save"
         :loading="guardando"
         :disabled="!formularioValido"
+        raised
         @click="guardarConfiguracion"
       />
     </div>
@@ -229,45 +257,58 @@ onMounted(cargarConfiguracion);
 
 <style scoped>
 .encabezado {
-  margin-bottom: 1rem;
-}
-
-.encabezado h1,
-.encabezado p {
-  margin: 0;
-}
-
-.encabezado p {
-  margin-top: 0.25rem;
-  color: #6b7280;
-}
-
-.mensaje {
-  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
 }
 
 .cuadricula {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.5rem;
+}
+
+.config-card {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.config-card-header {
+  display: flex;
+  align-items: center;
   gap: 1rem;
+}
+
+.config-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.config-card-sub {
+  margin: 0.15rem 0 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
 }
 
 .formulario {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.1rem;
 }
 
-.formulario label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+.campo-label {
   font-weight: 600;
-}
-
-.formulario small,
-.acciones small {
-  color: #6b7280;
+  font-size: 0.85rem;
+  color: #475569;
 }
 
 .acciones {
@@ -275,6 +316,7 @@ onMounted(cargarConfiguracion);
   justify-content: flex-end;
   align-items: center;
   gap: 1rem;
-  margin-top: 1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
 }
 </style>

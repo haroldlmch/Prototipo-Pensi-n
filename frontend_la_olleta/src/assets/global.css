@@ -1,0 +1,217 @@
+/* ============================================================
+   GLOBAL CSS — La O'lleta · Forzar Tema Claro
+   Este archivo reemplaza cualquier color oscuro heredado del
+   sistema operativo o de media queries de PrimeVue.
+   ============================================================ */
+
+/* --- Reset base --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light !important;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- Forzar modo claro en PrimeVue aunque el SO esté en modo oscuro --- */
+:root {
+  color-scheme: light !important;
+}
+
+/* ============================================================
+   ESTILOS PREMIUM PARA DATATABLE (PRIMEVUE)
+   ============================================================ */
+
+/* Contenedor principal de la tabla */
+.p-datatable {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+}
+
+/* Cabecera superior de la tabla */
+.p-datatable .p-datatable-header {
+  background-color: #ffffff !important;
+  padding: 1.25rem 1.5rem !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Encabezados de columnas (thead th) */
+.p-datatable .p-datatable-thead > tr > th {
+  background-color: #f8fafc !important; /* fondo gris muy claro */
+  color: #475569 !important; /* Slate-600 */
+  font-weight: 700 !important;
+  font-size: 0.75rem !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  padding: 1rem 1.25rem !important;
+  border-bottom: 2px solid #cbd5e1 !important; /* borde inferior más grueso */
+  border-right: none !important;
+  border-left: none !important;
+  transition: background-color 0.2s ease !important;
+}
+
+/* Celdas del cuerpo (tbody td) */
+.p-datatable .p-datatable-tbody > tr > td {
+  padding: 1.1rem 1.25rem !important; /* celdas más espaciadas y legibles */
+  color: #1e293b !important; /* Slate-800 para mejor legibilidad */
+  border-bottom: 1px solid #f1f5f9 !important; /* bordes más sutiles */
+  border-right: none !important;
+  border-left: none !important;
+  font-size: 0.9rem !important;
+}
+
+/* Filas alternas (stripedRows) */
+.p-datatable.p-datatable-striped .p-datatable-tbody > tr:nth-child(even) {
+  background-color: #f8fafc !important;
+}
+
+/* Hover de filas interactivo */
+.p-datatable .p-datatable-tbody > tr:not(.p-highlight):hover {
+  background-color: #f0f7ff !important; /* azul muy claro en hover */
+  cursor: pointer;
+}
+
+/* Paginador Modernizado */
+.p-paginator {
+  background: #ffffff !important;
+  border-top: 1px solid #e2e8f0 !important;
+  padding: 0.85rem 1rem !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+/* Botones del Paginador */
+.p-paginator .p-paginator-first,
+.p-paginator .p-paginator-prev,
+.p-paginator .p-paginator-next,
+.p-paginator .p-paginator-last,
+.p-paginator .p-paginator-page {
+  min-width: 2.25rem !important;
+  height: 2.25rem !important;
+  border-radius: 8px !important;
+  border: 1px solid transparent !important;
+  color: #64748b !important;
+  background: transparent !important;
+  transition: all 0.2s ease !important;
+  font-size: 0.85rem !important;
+  font-weight: 600 !important;
+}
+
+/* Hover en botones de paginación */
+.p-paginator .p-paginator-first:not(.p-disabled):hover,
+.p-paginator .p-paginator-prev:not(.p-disabled):hover,
+.p-paginator .p-paginator-next:not(.p-disabled):hover,
+.p-paginator .p-paginator-last:not(.p-disabled):hover,
+.p-paginator .p-paginator-page:not(.p-highlight):hover {
+  background: #f1f5f9 !important;
+  color: #1e293b !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Botón de página activo */
+.p-paginator .p-paginator-page.p-highlight {
+  background: #3b82f6 !important; /* azul principal */
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* Dialogs */
+.p-dialog {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-radius: 16px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.p-dialog .p-dialog-header {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  border-radius: 16px 16px 0 0 !important;
+  padding: 1.25rem 1.5rem !important;
+  font-weight: 700 !important;
+  font-size: 1.05rem !important;
+}
+
+.p-dialog .p-dialog-content {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  padding: 1.5rem !important;
+}
+
+/* Select / Dropdown */
+.p-select,
+.p-select-overlay,
+.p-select-list,
+.p-select-option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.p-select-option:hover {
+  background: #f0f7ff !important;
+}
+
+/* InputText */
+.p-inputtext {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+.p-inputtext:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* Scrollbar suave */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* --- Centrado global de todas las celdas de DataTable --- */
+.p-datatable .p-datatable-thead > tr > th,
+.p-datatable .p-datatable-tbody > tr > td {
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+/* Centrar el contenido flex dentro de las celdas y el texto de los títulos */
+.p-datatable .p-datatable-thead > tr > th .p-column-header-content,
+.p-datatable .p-datatable-thead > tr > th .p-datatable-column-header-content {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0.5rem !important;
+  text-align: center !important;
+  width: 100% !important;
+}

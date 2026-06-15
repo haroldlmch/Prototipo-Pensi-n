@@ -18,6 +18,11 @@ const visible = ref(false);
 const modoEdicion = ref(false);
 const opcionId = ref<number | null>(null);
 
+const mostrarConfirmarEliminar = ref(false);
+const idAEliminar = ref<number | null>(null);
+const mensajeEliminar = ref('');
+const eliminando = ref(false);
+
 const nombreSegundo = ref('');
 const idMenu = ref<number | null>(null);
 
@@ -90,21 +95,23 @@ const guardarRegistro = async () => {
   }
 };
 
-const eliminarRegistro = async (id: number) => {
-  const confirmar = confirm(
-    '¿Eliminar opción de menú?',
-  );
+const confirmarEliminar = (id: number) => {
+  idAEliminar.value = id;
+  mensajeEliminar.value = '¿Desea eliminar esta opción de menú? Esta acción no se puede deshacer.';
+  mostrarConfirmarEliminar.value = true;
+};
 
-  if (!confirmar) return;
-
+const eliminarRegistroConfirmado = async () => {
+  if (idAEliminar.value === null) return;
+  eliminando.value = true;
   try {
-    await api.delete(
-      `/opciones-menu/${id}`,
-    );
-
+    await api.delete(`/opciones-menu/${idAEliminar.value}`);
+    mostrarConfirmarEliminar.value = false;
     await cargarOpciones();
   } catch (error) {
     console.error(error);
+  } finally {
+    eliminando.value = false;
   }
 };
 
@@ -182,11 +189,6 @@ onMounted(async () => {
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-        <Column
-          field="id"
-          header="ID"
-          style="width: 80px;"
-        />
 
         <Column
           field="nombreSegundo"
@@ -228,7 +230,7 @@ onMounted(async () => {
               severity="danger"
               text
               rounded
-              @click="eliminarRegistro(slotProps.data.id)"
+              @click="confirmarEliminar(slotProps.data.id)"
             />
           </template>
         </Column>
@@ -283,6 +285,45 @@ onMounted(async () => {
           fluid
           @click="guardarRegistro"
         />
+      </div>
+    </Dialog>
+
+    <!-- Dialogo de Confirmación de Eliminación -->
+    <Dialog
+      v-model:visible="mostrarConfirmarEliminar"
+      modal
+      header="Confirmar Eliminación"
+      :style="{ width: '400px' }"
+      :closable="false"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.5rem; align-items: center; text-align: center; padding-top: 0.5rem;">
+        <div style="background: #fee2e2; color: #dc2626; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+          <i class="pi pi-exclamation-triangle" style="font-size: 1.75rem;"></i>
+        </div>
+        <div>
+          <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
+            ¿Estás seguro?
+          </h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.5;">
+            {{ mensajeEliminar }}
+          </p>
+        </div>
+        <div style="display: flex; gap: 1rem; width: 100%; margin-top: 0.5rem;">
+          <Button
+            label="Cancelar"
+            severity="secondary"
+            text
+            style="flex: 1; padding: 0.75rem;"
+            @click="mostrarConfirmarEliminar = false"
+          />
+          <Button
+            label="Eliminar"
+            severity="danger"
+            style="flex: 1; padding: 0.75rem;"
+            :loading="eliminando"
+            @click="eliminarRegistroConfirmado"
+          />
+        </div>
       </div>
     </Dialog>
   </div>

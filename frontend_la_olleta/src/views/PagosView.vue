@@ -43,6 +43,11 @@ const cargando = ref(false);
 const guardando = ref(false);
 const errorMensaje = ref('');
 
+const mostrarConfirmarEliminar = ref(false);
+const idAEliminar = ref<number | null>(null);
+const mensajeEliminar = ref('');
+const eliminando = ref(false);
+
 const pagoId = ref<number | null>(null);
 const fechaPago = ref('');
 const precioUnitario = ref<number | null>(null);
@@ -173,16 +178,24 @@ const guardarPago = async () => {
   }
 };
 
-const eliminarPago = async (id: number) => {
-  if (!confirm('¿Eliminar pago?')) return;
+const confirmarEliminar = (id: number) => {
+  idAEliminar.value = id;
+  mensajeEliminar.value = '¿Desea eliminar este pago? Esta acción no se puede deshacer.';
+  mostrarConfirmarEliminar.value = true;
+};
 
+const eliminarPagoConfirmado = async () => {
+  if (idAEliminar.value === null) return;
+  eliminando.value = true;
   errorMensaje.value = '';
-
   try {
-    await api.delete(`/pagos/${id}`);
+    await api.delete(`/pagos/${idAEliminar.value}`);
+    mostrarConfirmarEliminar.value = false;
     await cargarDatos();
   } catch (error) {
     errorMensaje.value = obtenerMensajeError(error);
+  } finally {
+    eliminando.value = false;
   }
 };
 
@@ -263,7 +276,6 @@ onMounted(cargarDatos);
     >
       <DataTable
         :value="pagos"
-        :loading="cargando"
         stripedRows
         paginator
         :rows="10"
@@ -272,11 +284,6 @@ onMounted(cargarDatos);
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-        <Column
-          field="id"
-          header="ID"
-          style="width: 80px;"
-        />
 
         <Column header="Pensionado" style="font-weight: 600; color: #334155;">
           <template #body="slotProps">
@@ -330,7 +337,7 @@ onMounted(cargarDatos);
               text
               rounded
               aria-label="Eliminar pago"
-              @click="eliminarPago(slotProps.data.id)"
+              @click="confirmarEliminar(slotProps.data.id)"
             />
           </template>
         </Column>
@@ -414,6 +421,45 @@ onMounted(cargarDatos);
           fluid
           @click="guardarPago"
         />
+      </div>
+    </Dialog>
+
+    <!-- Dialogo de Confirmación de Eliminación -->
+    <Dialog
+      v-model:visible="mostrarConfirmarEliminar"
+      modal
+      header="Confirmar Eliminación"
+      :style="{ width: '400px' }"
+      :closable="false"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.5rem; align-items: center; text-align: center; padding-top: 0.5rem;">
+        <div style="background: #fee2e2; color: #dc2626; width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+          <i class="pi pi-exclamation-triangle" style="font-size: 1.75rem;"></i>
+        </div>
+        <div>
+          <h3 style="margin: 0 0 0.5rem 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
+            ¿Estás seguro?
+          </h3>
+          <p style="margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.5;">
+            {{ mensajeEliminar }}
+          </p>
+        </div>
+        <div style="display: flex; gap: 1rem; width: 100%; margin-top: 0.5rem;">
+          <Button
+            label="Cancelar"
+            severity="secondary"
+            text
+            style="flex: 1; padding: 0.75rem;"
+            @click="mostrarConfirmarEliminar = false"
+          />
+          <Button
+            label="Eliminar"
+            severity="danger"
+            style="flex: 1; padding: 0.75rem;"
+            :loading="eliminando"
+            @click="eliminarPagoConfirmado"
+          />
+        </div>
       </div>
     </Dialog>
   </div>

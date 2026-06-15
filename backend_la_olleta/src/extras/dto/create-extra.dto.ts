@@ -10,7 +10,7 @@ Min,
 export class CreateExtraDto {
 
 @IsDateString()
-fecha!: Date;
+fecha!: string;
 
 @IsString()
 @MaxLength(200)

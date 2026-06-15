@@ -8,7 +8,7 @@ Min,
 export class CreatePagoDto {
 
 @IsDateString()
-fechaPago!: Date;
+fechaPago!: string;
 
 @IsNumber()
 @Min(0)

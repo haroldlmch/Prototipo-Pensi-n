@@ -9,7 +9,7 @@ Min,
 export class CreateConsumoDto {
 
 @IsDateString()
-fecha!: Date;
+fecha!: string;
 
 @IsInt()
 @Min(1)

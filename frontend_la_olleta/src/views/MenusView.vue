@@ -31,7 +31,7 @@ const cargarMenus = async () => {
 const editarMenu = (menu: any) => {
   menuId.value = menu.id;
 
-  fecha.value = menu.fecha;
+  fecha.value = menu.fecha ? menu.fecha.slice(0, 10) : '';
   sopa.value = menu.sopa;
 
   modoEdicion.value = true;
@@ -65,26 +65,21 @@ const limpiarFormulario = () => {
 
 const guardarMenu = async () => {
   try {
+    const payload = {
+      fecha: new Date(fecha.value + 'T00:00:00.000Z').toISOString(),
+      sopa: sopa.value,
+    };
+
     if (modoEdicion.value) {
-
       await api.patch(
-  `/menus/${menuId.value}`,
-  {
-    fecha: new Date(fecha.value).toISOString(),
-    sopa: sopa.value,
-  },
-);
-
+        `/menus/${menuId.value}`,
+        payload,
+      );
     } else {
-
       await api.post(
-  '/menus',
-  {
-    fecha: new Date(fecha.value).toISOString(),
-    sopa: sopa.value,
-  },
-);
-
+        '/menus',
+        payload,
+      );
     }
 
     visible.value = false;
@@ -104,71 +99,117 @@ const nuevoMenu = () => {
   visible.value = true;
 };
 
+const formatFecha = (fechaStr: string) => {
+  if (!fechaStr) return '';
+  const date = new Date(fechaStr);
+  return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
+};
+
 onMounted(() => {
   cargarMenus();
 });
 </script>
 
 <template>
-  <div>
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- Cabecera -->
     <div
       style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
       "
     >
-      <h1>Menús</h1>
+      <div>
+        <h1
+          style="
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+          "
+        >
+          Menús
+        </h1>
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+          Programación diaria del plato de sopa principal del menú.
+        </p>
+      </div>
 
       <Button
         label="Nuevo Menú"
         icon="pi pi-plus"
+        severity="success"
+        raised
         @click="nuevoMenu"
       />
     </div>
 
-    <DataTable
-      :value="menus"
-      stripedRows
-      paginator
-      :rows="10"
+    <!-- Contenedor Tabla -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
     >
-      <Column
-        field="id"
-        header="ID"
-      />
+      <DataTable
+        :value="menus"
+        stripedRows
+        paginator
+        :rows="10"
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
+      >
+        <Column
+          field="id"
+          header="ID"
+          style="width: 80px;"
+        />
 
-      <Column
-        field="fecha"
-        header="Fecha"
-      />
+        <Column
+          header="Fecha"
+          style="font-weight: 600; color: #334155; width: 200px;"
+        >
+          <template #body="slotProps">
+            {{ formatFecha(slotProps.data.fecha) }}
+          </template>
+        </Column>
 
-      <Column
-        field="sopa"
-        header="Sopa"
-      />
+        <Column
+          field="sopa"
+          header="Sopa"
+          style="color: #475569;"
+        />
 
-      <Column header="Acciones">
-        <template #body="slotProps">
+        <Column header="Acciones" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <Button
+              icon="pi pi-pencil"
+              severity="warning"
+              text
+              rounded
+              style="margin-right: .25rem"
+              @click="editarMenu(slotProps.data)"
+            />
 
-          <Button
-            icon="pi pi-pencil"
-            severity="warning"
-            style="margin-right:.5rem"
-            @click="editarMenu(slotProps.data)"
-          />
+            <Button
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              rounded
+              @click="eliminarMenu(slotProps.data.id)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
 
-          <Button
-            icon="pi pi-trash"
-            severity="danger"
-            @click="eliminarMenu(slotProps.data.id)"
-          />
-
-        </template>
-      </Column>
-    </DataTable>
-
+    <!-- Dialogo de Formulario -->
     <Dialog
       v-model:visible="visible"
       modal
@@ -177,40 +218,50 @@ onMounted(() => {
           ? 'Editar Menú'
           : 'Nuevo Menú'
       "
-      :style="{ width: '500px' }"
+      :style="{ width: '450px' }"
     >
       <div
         style="
-          display:flex;
-          flex-direction:column;
-          gap:1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+          padding-top: 0.5rem;
         "
       >
-        <div>
-          <label>Fecha</label>
-
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
           <input
             v-model="fecha"
             type="date"
             style="
-              width:100%;
-              padding:.75rem;
+              width: 100%;
+              padding: 0.75rem 1rem;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              font-family: inherit;
+              box-sizing: border-box;
             "
           />
         </div>
 
-        <InputText
-          v-model="sopa"
-          placeholder="Nombre de la sopa"
-        />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Sopa</label>
+          <InputText
+            v-model="sopa"
+            placeholder="Ingrese el nombre de la sopa"
+            style="padding: 0.75rem 1rem;"
+            fluid
+          />
+        </div>
 
         <Button
           label="Guardar"
           icon="pi pi-save"
+          style="margin-top: 0.5rem; padding: 0.75rem;"
+          fluid
           @click="guardarMenu"
         />
       </div>
     </Dialog>
-
   </div>
 </template>

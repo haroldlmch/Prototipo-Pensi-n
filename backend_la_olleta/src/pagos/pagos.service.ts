@@ -44,7 +44,7 @@ if (!pension) {
 const pago =
   this.pagoRepository.create({
     fechaPago:
-      createPagoDto.fechaPago,
+      new Date(createPagoDto.fechaPago),
 
     precioUnitario:
       createPagoDto.precioUnitario,

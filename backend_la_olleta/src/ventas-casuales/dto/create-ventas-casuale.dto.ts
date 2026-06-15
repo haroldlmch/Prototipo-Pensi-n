@@ -8,7 +8,7 @@ Min,
 export class CreateVentasCasualeDto {
 
 @IsDateString()
-fecha!: Date;
+fecha!: string;
 
 @IsInt()
 @Min(1)

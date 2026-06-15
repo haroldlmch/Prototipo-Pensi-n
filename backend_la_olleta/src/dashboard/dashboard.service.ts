@@ -67,7 +67,9 @@ export class DashboardService {
         id: 'DESC',
       },
       relations: {
-        pension: true,
+        pension: {
+          pensionado: true,
+        },
         opcionMenu: true,
       },
     });
@@ -81,7 +83,9 @@ export class DashboardService {
         id: 'DESC',
       },
       relations: {
-        pension: true,
+        pension: {
+          pensionado: true,
+        },
       },
     });
   }

@@ -7,6 +7,7 @@ import Column from 'primevue/column';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Checkbox from 'primevue/checkbox';
+import Tag from 'primevue/tag';
 
 import api from '../api/axios';
 
@@ -105,72 +106,119 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- Cabecera -->
     <div
       style="
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
       "
     >
-      <h1>Pensionados</h1>
+      <div>
+        <h1
+          style="
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+          "
+        >
+          Pensionados
+        </h1>
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+          Directorio de beneficiarios registrados en el sistema de pensiones.
+        </p>
+      </div>
 
       <Button
         label="Nuevo Pensionado"
         icon="pi pi-plus"
+        severity="success"
+        raised
         @click="nuevoPensionado"
       />
     </div>
 
-    <DataTable
-      :value="pensionados"
-      stripedRows
-      paginator
-      :rows="10"
+    <!-- Contenedor de Tabla Principal -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
     >
-      <Column
-        field="id"
-        header="ID"
-      />
-
-      <Column
-        field="nombreCompleto"
-        header="Nombre Completo"
-      />
-
-      <Column
-        field="telefono"
-        header="Teléfono"
-      />
-
-      <Column
-        field="estado"
-        header="Estado"
+      <DataTable
+        :value="pensionados"
+        stripedRows
+        paginator
+        :rows="10"
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
       >
-        <template #body="slotProps">
-          {{ slotProps.data.estado ? 'Activo' : 'Inactivo' }}
-        </template>
-      </Column>
+        <Column
+          field="id"
+          header="ID"
+          style="width: 80px;"
+        />
 
-      <Column header="Acciones">
-        <template #body="slotProps">
-          <Button
-            icon="pi pi-pencil"
-            severity="warning"
-            style="margin-right: .5rem"
-            @click="editarPensionado(slotProps.data)"
-          />
+        <Column
+          field="nombreCompleto"
+          header="Nombre Completo"
+          style="font-weight: 600; color: #334155;"
+        />
 
-          <Button
-            icon="pi pi-trash"
-            severity="danger"
-            @click="eliminarPensionado(slotProps.data.id)"
-          />
-        </template>
-      </Column>
-    </DataTable>
+        <Column
+          field="telefono"
+          header="Teléfono"
+          style="color: #475569;"
+        >
+          <template #body="slotProps">
+            {{ slotProps.data.telefono || 'Sin teléfono' }}
+          </template>
+        </Column>
 
+        <Column
+          field="estado"
+          header="Estado"
+          style="width: 120px;"
+        >
+          <template #body="slotProps">
+            <Tag
+              :value="slotProps.data.estado ? 'Activo' : 'Inactivo'"
+              :severity="slotProps.data.estado ? 'success' : 'danger'"
+            />
+          </template>
+        </Column>
+
+        <Column header="Acciones" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <Button
+              icon="pi pi-pencil"
+              severity="warning"
+              text
+              rounded
+              style="margin-right: .25rem"
+              @click="editarPensionado(slotProps.data)"
+            />
+
+            <Button
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              rounded
+              @click="eliminarPensionado(slotProps.data.id)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <!-- Dialogo de Creación / Edición -->
     <Dialog
       v-model:visible="visible"
       modal
@@ -179,39 +227,52 @@ onMounted(() => {
           ? 'Editar Pensionado'
           : 'Nuevo Pensionado'
       "
-      :style="{ width: '500px' }"
+      :style="{ width: '450px' }"
     >
       <div
         style="
           display: flex;
           flex-direction: column;
-          gap: 1rem;
+          gap: 1.25rem;
+          padding-top: 0.5rem;
         "
       >
-        <InputText
-          v-model="nombreCompleto"
-          placeholder="Nombre completo"
-        />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Nombre Completo</label>
+          <InputText
+            v-model="nombreCompleto"
+            placeholder="Ingrese el nombre completo"
+            style="padding: 0.75rem 1rem;"
+            fluid
+          />
+        </div>
 
-        <InputText
-          v-model="telefono"
-          placeholder="Teléfono"
-        />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Teléfono</label>
+          <InputText
+            v-model="telefono"
+            placeholder="Ingrese el número de teléfono"
+            style="padding: 0.75rem 1rem;"
+            fluid
+          />
+        </div>
 
-        <div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
           <Checkbox
             v-model="estado"
             binary
+            id="estado-pensionado"
           />
-
-          <span style="margin-left: .5rem">
-            Activo
-          </span>
+          <label for="estado-pensionado" style="font-weight: 600; color: #475569; font-size: 0.9rem; cursor: pointer;">
+            Pensionado Activo
+          </label>
         </div>
 
         <Button
           label="Guardar"
           icon="pi pi-save"
+          style="margin-top: 0.5rem; padding: 0.75rem;"
+          fluid
           @click="guardarPensionado"
         />
       </div>

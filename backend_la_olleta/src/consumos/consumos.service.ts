@@ -82,7 +82,7 @@ await this.pensionRepository.save(
 const consumo =
   this.consumoRepository.create({
     fecha:
-      createConsumoDto.fecha,
+      new Date(createConsumoDto.fecha),
 
     cantidadCompletos:
       createConsumoDto.cantidadCompletos,
@@ -149,10 +149,106 @@ updateConsumoDto: UpdateConsumoDto,
 const consumo =
   await this.findOne(id);
 
-Object.assign(
-  consumo,
-  updateConsumoDto,
-);
+const pensionAnterior = consumo.pension;
+
+let nuevaPension = pensionAnterior;
+
+if (
+  updateConsumoDto.idPension &&
+  updateConsumoDto.idPension !== pensionAnterior.id
+) {
+  const pensionEncontrada =
+    await this.pensionRepository.findOne({
+      where: {
+        id: updateConsumoDto.idPension,
+      },
+    });
+
+  if (!pensionEncontrada) {
+    throw new NotFoundException(
+      'Pensión no encontrada',
+    );
+  }
+
+  nuevaPension = pensionEncontrada;
+}
+
+const nuevaCantidad =
+  updateConsumoDto.cantidadCompletos ??
+  consumo.cantidadCompletos;
+
+let nuevaOpcionMenu = consumo.opcionMenu;
+
+if (updateConsumoDto.idOpcionMenu) {
+  const opcionMenu =
+    await this.opcionMenuRepository.findOne({
+      where: {
+        id: updateConsumoDto.idOpcionMenu,
+      },
+    });
+
+  if (!opcionMenu) {
+    throw new NotFoundException(
+      'Opción de menú no encontrada',
+    );
+  }
+
+  nuevaOpcionMenu = opcionMenu;
+}
+
+if (nuevaPension.id === pensionAnterior.id) {
+  const disponiblesConDevolucion =
+    pensionAnterior.completosDisponibles +
+    consumo.cantidadCompletos;
+
+  if (disponiblesConDevolucion < nuevaCantidad) {
+    throw new BadRequestException(
+      'No existen completos suficientes',
+    );
+  }
+
+  pensionAnterior.completosDisponibles =
+    disponiblesConDevolucion - nuevaCantidad;
+
+  await this.pensionRepository.save(
+    pensionAnterior,
+  );
+} else {
+  if (
+    nuevaPension.completosDisponibles <
+    nuevaCantidad
+  ) {
+    throw new BadRequestException(
+      'No existen completos suficientes',
+    );
+  }
+
+  pensionAnterior.completosDisponibles +=
+    consumo.cantidadCompletos;
+
+  nuevaPension.completosDisponibles -=
+    nuevaCantidad;
+
+  await this.pensionRepository.save([
+    pensionAnterior,
+    nuevaPension,
+  ]);
+}
+
+if (updateConsumoDto.fecha) {
+  consumo.fecha = new Date(
+    updateConsumoDto.fecha,
+  );
+}
+
+if (updateConsumoDto.tipoConsumo) {
+  consumo.tipoConsumo =
+    updateConsumoDto.tipoConsumo;
+}
+
+consumo.cantidadCompletos = nuevaCantidad;
+consumo.pension = nuevaPension;
+consumo.opcionMenu = nuevaOpcionMenu;
 
 return await this.consumoRepository.save(
   consumo,
@@ -164,7 +260,14 @@ return await this.consumoRepository.save(
 async remove(id: number) {
 
 
-await this.findOne(id);
+const consumo = await this.findOne(id);
+
+consumo.pension.completosDisponibles +=
+  consumo.cantidadCompletos;
+
+await this.pensionRepository.save(
+  consumo.pension,
+);
 
 await this.consumoRepository.delete(id);
 

@@ -7,6 +7,8 @@ import Sidebar from '../components/Sidebar.vue';
     style="
       display: flex;
       min-height: 100vh;
+      background-color: #f8fafc;
+      font-family: 'Inter', sans-serif;
     "
   >
     <Sidebar />
@@ -14,7 +16,9 @@ import Sidebar from '../components/Sidebar.vue';
     <main
       style="
         flex: 1;
-        padding: 1rem;
+        padding: 2rem;
+        overflow-y: auto;
+        height: 100vh;
       "
     >
       <RouterView />

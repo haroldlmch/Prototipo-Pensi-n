@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
@@ -108,6 +108,19 @@ const eliminarRegistro = async (id: number) => {
   }
 };
 
+const formatFecha = (fechaStr: string) => {
+  if (!fechaStr) return '';
+  const date = new Date(fechaStr);
+  return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
+};
+
+const menusOpciones = computed(() => {
+  return menus.value.map((m) => ({
+    ...m,
+    descripcion: `${formatFecha(m.fecha)} - Sopa: ${m.sopa}`,
+  }));
+});
+
 onMounted(async () => {
   await cargarMenus();
   await cargarOpciones();
@@ -115,76 +128,114 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
+  <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+    <!-- Cabecera -->
     <div
       style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
       "
     >
-      <h1>Opciones Menú</h1>
+      <div>
+        <h1
+          style="
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+          "
+        >
+          Opciones Menú
+        </h1>
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+          Configuración del plato principal (segundo) asociado a un menú diario.
+        </p>
+      </div>
 
       <Button
         label="Nueva Opción"
         icon="pi pi-plus"
+        severity="success"
+        raised
         @click="nuevoRegistro"
       />
     </div>
 
-    <DataTable
-      :value="opciones"
-      stripedRows
-      paginator
-      :rows="10"
+    <!-- Contenedor Tabla -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
     >
-      <Column
-        field="id"
-        header="ID"
-      />
-
-      <Column
-        field="nombreSegundo"
-        header="Segundo"
-      />
-
-      <Column
-        header="Menú"
+      <DataTable
+        :value="opciones"
+        stripedRows
+        paginator
+        :rows="10"
+        responsiveLayout="scroll"
+        class="p-datatable-sm"
       >
-        <template #body="slotProps">
-          {{ slotProps.data.menu?.fecha }}
-        </template>
-      </Column>
+        <Column
+          field="id"
+          header="ID"
+          style="width: 80px;"
+        />
 
-      <Column
-        header="Sopa"
-      >
-        <template #body="slotProps">
-          {{ slotProps.data.menu?.sopa }}
-        </template>
-      </Column>
+        <Column
+          field="nombreSegundo"
+          header="Segundo (Plato Principal)"
+          style="font-weight: 600; color: #334155;"
+        />
 
-      <Column header="Acciones">
-        <template #body="slotProps">
+        <Column
+          header="Fecha Menú"
+          style="color: #475569; width: 180px;"
+        >
+          <template #body="slotProps">
+            {{ formatFecha(slotProps.data.menu?.fecha) }}
+          </template>
+        </Column>
 
-          <Button
-            icon="pi pi-pencil"
-            severity="warning"
-            style="margin-right:.5rem"
-            @click="editarRegistro(slotProps.data)"
-          />
+        <Column
+          header="Sopa Acompañante"
+          style="color: #475569;"
+        >
+          <template #body="slotProps">
+            {{ slotProps.data.menu?.sopa || 'No especificada' }}
+          </template>
+        </Column>
 
-          <Button
-            icon="pi pi-trash"
-            severity="danger"
-            @click="eliminarRegistro(slotProps.data.id)"
-          />
+        <Column header="Acciones" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <Button
+              icon="pi pi-pencil"
+              severity="warning"
+              text
+              rounded
+              style="margin-right: .25rem"
+              @click="editarRegistro(slotProps.data)"
+            />
 
-        </template>
-      </Column>
-    </DataTable>
+            <Button
+              icon="pi pi-trash"
+              severity="danger"
+              text
+              rounded
+              @click="eliminarRegistro(slotProps.data.id)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
 
+    <!-- Dialogo de Formulario -->
     <Dialog
       v-model:visible="visible"
       modal
@@ -193,31 +244,43 @@ onMounted(async () => {
           ? 'Editar Opción'
           : 'Nueva Opción'
       "
-      :style="{ width: '500px' }"
+      :style="{ width: '450px' }"
     >
       <div
         style="
-          display:flex;
-          flex-direction:column;
-          gap:1rem;
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+          padding-top: 0.5rem;
         "
       >
-        <InputText
-          v-model="nombreSegundo"
-          placeholder="Nombre del segundo"
-        />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Plato Principal (Segundo)</label>
+          <InputText
+            v-model="nombreSegundo"
+            placeholder="Ingrese el nombre del segundo"
+            style="padding: 0.75rem 1rem;"
+            fluid
+          />
+        </div>
 
-        <Select
-          v-model="idMenu"
-          :options="menus"
-          optionLabel="fecha"
-          optionValue="id"
-          placeholder="Seleccione un menú"
-        />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Menú Diario</label>
+          <Select
+            v-model="idMenu"
+            :options="menusOpciones"
+            optionLabel="descripcion"
+            optionValue="id"
+            placeholder="Seleccione el menú asociado"
+            fluid
+          />
+        </div>
 
         <Button
           label="Guardar"
           icon="pi pi-save"
+          style="margin-top: 0.5rem; padding: 0.75rem;"
+          fluid
           @click="guardarRegistro"
         />
       </div>

@@ -54,41 +54,116 @@ const login = async () => {
       display: flex;
       justify-content: center;
       align-items: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+      font-family: 'Inter', sans-serif;
     "
   >
     <div
       style="
-        width: 350px;
+        width: 400px;
+        background: white;
+        border-radius: 24px;
+        padding: 2.5rem;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25), 0 10px 10px -5px rgba(0, 0, 0, 0.15);
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 1.5rem;
       "
     >
-      <h2>La O'lleta</h2>
+      <!-- Logo / Header -->
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+        <div
+          style="
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.4);
+          "
+        >
+          <i class="pi pi-prime" style="font-size: 1.75rem;"></i>
+        </div>
+        <h2
+          style="
+            margin: 0.5rem 0 0 0;
+            color: #0f172a;
+            font-size: 1.75rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+          "
+        >
+          La O'lleta
+        </h2>
+        <span style="color: #64748b; font-size: 0.9rem; font-weight: 500;">Sistema de Gestión de Pensiones</span>
+      </div>
 
-      <InputText
-        v-model="nombreUsuario"
-        placeholder="Usuario"
-      />
+      <!-- Form Fields -->
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Usuario</label>
+          <div class="p-input-icon-left" style="width: 100%;">
+            <InputText
+              v-model="nombreUsuario"
+              placeholder="Ingrese su usuario"
+              style="width: 100%; padding: 0.75rem 1rem;"
+            />
+          </div>
+        </div>
 
-      <Password
-        v-model="contrasena"
-        placeholder="Contraseña"
-        :feedback="false"
-      />
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Contraseña</label>
+          <Password
+            v-model="contrasena"
+            placeholder="Ingrese su contraseña"
+            :feedback="false"
+            toggleMask
+            fluid
+            style="width: 100%;"
+            :inputStyle="{ width: '100%', padding: '0.75rem 1rem' }"
+          />
+        </div>
+      </div>
 
+      <!-- Action Button -->
       <Button
-        label="Iniciar sesión"
+        label="Iniciar Sesión"
         :loading="cargando"
+        style="
+          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+          border: none;
+          padding: 0.85rem;
+          border-radius: 12px;
+          font-weight: 600;
+          font-size: 1rem;
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+          cursor: pointer;
+        "
         @click="login"
       />
 
-      <small
+      <!-- Error Message -->
+      <div
         v-if="error"
-        style="color: red;"
+        style="
+          background: #fef2f2;
+          border: 1px solid #fee2e2;
+          color: #b91c1c;
+          padding: 0.75rem 1rem;
+          border-radius: 12px;
+          font-size: 0.85rem;
+          font-weight: 500;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        "
       >
-        {{ error }}
-      </small>
+        <i class="pi pi-exclamation-circle" style="font-size: 1rem;"></i>
+        <span>{{ error }}</span>
+      </div>
     </div>
   </div>
 </template>

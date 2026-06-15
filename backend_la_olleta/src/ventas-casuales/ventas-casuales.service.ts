@@ -26,9 +26,12 @@ createVentasCasualeDto: CreateVentasCasualeDto,
 
 
 const venta =
-  this.ventasCasualesRepository.create(
-    createVentasCasualeDto,
-  );
+  this.ventasCasualesRepository.create({
+    ...createVentasCasualeDto,
+    fecha: new Date(
+      createVentasCasualeDto.fecha,
+    ),
+  });
 
 return await this.ventasCasualesRepository.save(
   venta,
@@ -77,10 +80,35 @@ updateVentasCasualeDto: UpdateVentasCasualeDto,
 const venta =
   await this.findOne(id);
 
-Object.assign(
-  venta,
-  updateVentasCasualeDto,
-);
+if (updateVentasCasualeDto.fecha) {
+  venta.fecha = new Date(
+    updateVentasCasualeDto.fecha,
+  );
+}
+
+if (
+  updateVentasCasualeDto.cantidadCompletos !==
+  undefined
+) {
+  venta.cantidadCompletos =
+    updateVentasCasualeDto.cantidadCompletos;
+}
+
+if (
+  updateVentasCasualeDto.precioUnitario !==
+  undefined
+) {
+  venta.precioUnitario =
+    updateVentasCasualeDto.precioUnitario;
+}
+
+if (
+  updateVentasCasualeDto.montoTotal !==
+  undefined
+) {
+  venta.montoTotal =
+    updateVentasCasualeDto.montoTotal;
+}
 
 return await this.ventasCasualesRepository.save(
   venta,

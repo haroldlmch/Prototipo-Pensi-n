@@ -48,7 +48,7 @@ if (!pension) {
 const extra =
   this.extraRepository.create({
     fecha:
-      createExtraDto.fecha,
+      new Date(createExtraDto.fecha),
 
     descripcion:
       createExtraDto.descripcion,
@@ -112,10 +112,37 @@ updateExtraDto: UpdateExtraDto,
 const extra =
   await this.findOne(id);
 
-Object.assign(
-  extra,
-  updateExtraDto,
-);
+if (updateExtraDto.fecha) {
+  extra.fecha = new Date(
+    updateExtraDto.fecha,
+  );
+}
+
+if (updateExtraDto.descripcion) {
+  extra.descripcion =
+    updateExtraDto.descripcion;
+}
+
+if (updateExtraDto.precio !== undefined) {
+  extra.precio = updateExtraDto.precio;
+}
+
+if (updateExtraDto.idPension) {
+  const pension =
+    await this.pensionRepository.findOne({
+      where: {
+        id: updateExtraDto.idPension,
+      },
+    });
+
+  if (!pension) {
+    throw new NotFoundException(
+      'Pensión no encontrada',
+    );
+  }
+
+  extra.pension = pension;
+}
 
 return await this.extraRepository.save(
   extra,

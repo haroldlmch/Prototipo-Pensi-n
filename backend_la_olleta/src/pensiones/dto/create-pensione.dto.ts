@@ -8,8 +8,9 @@ MaxLength,
 
 export class CreatePensioneDto {
 
-@IsDateString()
-fechaInicio!: Date;
+
+@IsString()
+fechaInicio!: string;
 
 @IsInt()
 @Min(1)

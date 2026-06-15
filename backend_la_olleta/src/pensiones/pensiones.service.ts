@@ -44,7 +44,9 @@ if (!pensionado) {
 const pension =
   this.pensioneRepository.create({
     fechaInicio:
-      createPensioneDto.fechaInicio,
+      new Date(
+        createPensioneDto.fechaInicio,
+      ),
 
     cantidadCompletos:
       createPensioneDto.cantidadCompletos,
@@ -106,24 +108,70 @@ return pension;
 }
 
 async update(
-id: number,
-updatePensioneDto: UpdatePensioneDto,
+  id: number,
+  updatePensioneDto: UpdatePensioneDto,
 ) {
 
+  const pension =
+    await this.findOne(id);
 
-const pension =
-  await this.findOne(id);
+  if (
+  updatePensioneDto.fechaInicio
+) {
+  pension.fechaInicio =
+    new Date(
+      updatePensioneDto.fechaInicio,
+    );
+}
 
-Object.assign(
-  pension,
-  updatePensioneDto,
-);
+  if (
+    updatePensioneDto.cantidadCompletos !==
+    undefined
+  ) {
+    pension.cantidadCompletos =
+      updatePensioneDto.cantidadCompletos;
+  }
 
-return await this.pensioneRepository.save(
-  pension,
-);
+  if (
+    updatePensioneDto.completosDisponibles !==
+    undefined
+  ) {
+    pension.completosDisponibles =
+      updatePensioneDto.completosDisponibles;
+  }
 
+  if (
+    updatePensioneDto.estado
+  ) {
+    pension.estado =
+      updatePensioneDto.estado;
+  }
 
+  if (
+    updatePensioneDto.idPensionado
+  ) {
+
+    const pensionado =
+      await this.pensionadoRepository.findOne({
+        where: {
+          id:
+            updatePensioneDto.idPensionado,
+        },
+      });
+
+    if (!pensionado) {
+      throw new NotFoundException(
+        'Pensionado no encontrado',
+      );
+    }
+
+    pension.pensionado =
+      pensionado;
+  }
+
+  return await this.pensioneRepository.save(
+    pension,
+  );
 }
 
 async remove(id: number) {

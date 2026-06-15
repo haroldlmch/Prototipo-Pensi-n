@@ -127,6 +127,7 @@ onMounted(() => {
             font-weight: 800;
             background: linear-gradient(135deg, #1e293b 0%, #3b82f6 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
           "
         >
@@ -491,64 +492,63 @@ onMounted(() => {
               <span style="font-size: 0.9rem; font-weight: 500;">¡Todo al día!<br />No hay pensiones con saldo bajo.</span>
             </div>
 
-            <div v-else style="display: flex; flex-direction: column; gap: 1rem; max-height: 350px; overflow-y: auto;">
-              <div
-                v-for="alerta in alertas"
-                :key="alerta.id"
-                style="
-                  border: 1px solid #fee2e2;
-                  background: #fff5f5;
-                  border-radius: 12px;
-                  padding: 0.85rem;
-                  display: flex;
-                  flex-direction: column;
-                  gap: 0.5rem;
-                  position: relative;
-                "
-              >
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                  <span style="font-weight: 700; color: #991b1b; font-size: 0.9rem; line-height: 1.2;">
-                    {{ alerta.pensionado?.nombreCompleto }}
-                  </span>
-                  <span
-                    style="
-                      font-weight: 800;
-                      color: #dc2626;
-                      font-size: 0.75rem;
-                      background: #fee2e2;
-                      padding: 0.15rem 0.4rem;
-                      border-radius: 6px;
-                      white-space: nowrap;
-                    "
-                  >
-                    {{ alerta.completosDisponibles }} disp.
-                  </span>
-                </div>
-
-                <!-- Barra de Progreso Personalizada -->
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                  <div style="flex: 1; height: 6px; background: #fee2e2; border-radius: 3px; border: 1px solid #fca5a5; overflow: hidden;">
-                    <div
-                      :style="`width: ${(alerta.completosDisponibles / alerta.cantidadCompletos) * 100}%; height: 100%; background: #dc2626; border-radius: 3px;`"
-                    ></div>
+            <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
+              <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 350px; overflow-y: auto; padding-right: 0.25rem;">
+                <div
+                  v-for="alerta in alertas"
+                  :key="alerta.id"
+                  style="
+                    border: 1px solid #fee2e2;
+                    background: #fff5f5;
+                    border-radius: 12px;
+                    padding: 0.85rem;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                    position: relative;
+                  "
+                >
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
+                    <span style="font-weight: 700; color: #991b1b; font-size: 0.9rem; line-height: 1.2;">
+                      {{ alerta.pensionado?.nombreCompleto }}
+                    </span>
+                    <span
+                      style="
+                        font-weight: 800;
+                        color: #dc2626;
+                        font-size: 0.75rem;
+                        background: #fee2e2;
+                        padding: 0.15rem 0.4rem;
+                        border-radius: 6px;
+                        white-space: nowrap;
+                      "
+                    >
+                      {{ alerta.completosDisponibles }} disp.
+                    </span>
                   </div>
-                  <span style="font-size: 0.75rem; color: #7f1d1d; font-weight: 600; white-space: nowrap;">
-                    {{ alerta.completosDisponibles }}/{{ alerta.cantidadCompletos }}
-                  </span>
-                </div>
 
-                <div style="display: flex; justify-content: flex-end; margin-top: 0.25rem;">
-                  <Button
-                    icon="pi pi-plus"
-                    label="Renovar"
-                    severity="danger"
-                    size="small"
-                    outlined
-                    style="font-size: 0.75rem; padding: 0.25rem 0.5rem;"
-                    @click="navegar('/pagos')"
-                  />
+                  <!-- Barra de Progreso Personalizada -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <div style="flex: 1; height: 6px; background: #fee2e2; border-radius: 3px; border: 1px solid #fca5a5; overflow: hidden;">
+                      <div
+                        :style="`width: ${(alerta.completosDisponibles / alerta.cantidadCompletos) * 100}%; height: 100%; background: #dc2626; border-radius: 3px;`"
+                      ></div>
+                    </div>
+                    <span style="font-size: 0.75rem; color: #7f1d1d; font-weight: 600; white-space: nowrap;">
+                      {{ alerta.completosDisponibles }}/{{ alerta.cantidadCompletos }}
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <Button
+                icon="pi pi-sync"
+                label="Renovar"
+                severity="danger"
+                outlined
+                style="width: 100%; padding: 0.6rem; font-weight: 600;"
+                @click="navegar('/pensiones')"
+              />
             </div>
           </div>
 

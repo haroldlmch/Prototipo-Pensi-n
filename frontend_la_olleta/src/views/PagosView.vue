@@ -6,6 +6,7 @@ import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
 import Dialog from 'primevue/dialog';
 import InputNumber from 'primevue/inputnumber';
+import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import Select from 'primevue/select';
 
@@ -37,6 +38,17 @@ interface PensionOption extends Pension {
 
 const pagos = ref<Pago[]>([]);
 const pensiones = ref<Pension[]>([]);
+const busquedaPensionado = ref('');
+
+const pagosFiltrados = computed(() => {
+  if (!busquedaPensionado.value.trim()) return pagos.value;
+  return pagos.value.filter((pago) =>
+    (pago.pension?.pensionado?.nombreCompleto ?? '')
+      .toLowerCase()
+      .includes(busquedaPensionado.value.toLowerCase()),
+  );
+});
+
 const visible = ref(false);
 const modoEdicion = ref(false);
 const cargando = ref(false);
@@ -100,18 +112,26 @@ const obtenerFechaLocal = () => {
 const convertirFechaISO = (valor: string) =>
   new Date(`${valor}T00:00:00.000Z`).toISOString();
 
+const precioPensionadoSugerido = ref<number | null>(null);
+
 const cargarDatos = async () => {
   cargando.value = true;
   errorMensaje.value = '';
 
   try {
-    const [pagosResponse, pensionesResponse] = await Promise.all([
+    const [pagosResponse, pensionesResponse, configResponse] = await Promise.all([
       api.get('/pagos'),
       api.get('/pensiones'),
+      api.get('/configuracion'),
     ]);
 
     pagos.value = pagosResponse.data;
     pensiones.value = pensionesResponse.data;
+
+    const config = Array.isArray(configResponse.data) ? configResponse.data[0] : configResponse.data;
+    if (config) {
+      precioPensionadoSugerido.value = Number(config.precioPensionado);
+    }
   } catch (error) {
     errorMensaje.value = obtenerMensajeError(error);
   } finally {
@@ -131,6 +151,9 @@ const limpiarFormulario = () => {
 
 const nuevoPago = () => {
   limpiarFormulario();
+  if (precioPensionadoSugerido.value !== null) {
+    precioUnitario.value = precioPensionadoSugerido.value;
+  }
   visible.value = true;
 };
 
@@ -264,6 +287,27 @@ onMounted(cargarDatos);
       {{ errorMensaje }}
     </Message>
 
+    <!-- Buscador -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <i class="pi pi-search" style="color: #94a3b8;"></i>
+        <InputText
+          v-model="busquedaPensionado"
+          placeholder="Buscar por nombre de pensionado..."
+          style="padding: 0.75rem 1rem; flex: 1;"
+          fluid
+        />
+      </div>
+    </div>
+
     <!-- Tabla Principal -->
     <div
       style="
@@ -275,7 +319,7 @@ onMounted(cargarDatos);
       "
     >
       <DataTable
-        :value="pagos"
+        :value="pagosFiltrados"
         stripedRows
         paginator
         :rows="10"

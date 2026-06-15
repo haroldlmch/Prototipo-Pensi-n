@@ -2,10 +2,12 @@
 import { computed, onMounted, ref } from 'vue';
 
 import Button from 'primevue/button';
+import Calendar from 'primevue/calendar';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
 import Dialog from 'primevue/dialog';
 import InputNumber from 'primevue/inputnumber';
+import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import Select from 'primevue/select';
 import Tag from 'primevue/tag';
@@ -61,25 +63,65 @@ const eliminando = ref(false);
 const consumoId = ref<number | null>(null);
 const fecha = ref('');
 const cantidadCompletos = ref<number | null>(1);
-const tipoConsumo = ref('ALMUERZO');
+const tipoConsumo = ref('Almuerzo');
 const idPension = ref<number | null>(null);
 const idOpcionMenu = ref<number | null>(null);
 
-const tiposConsumo = ['ALMUERZO', 'PARA LLEVAR', 'OTRO'];
+const tiposConsumo = ['Almuerzo', 'Para llevar'];
+
+// Variables para búsqueda y filtro
+const busquedaNombre = ref('');
+const busquedaFecha = ref<Date | null>(null);
+const tipoFiltro = ref('todos'); // 'nombre', 'fecha', 'todos'
+
+const consumosFiltrados = computed(() => {
+  let resultado = consumos.value;
+
+  if (tipoFiltro.value === 'nombre' || tipoFiltro.value === 'todos') {
+    if (busquedaNombre.value.trim()) {
+      resultado = resultado.filter((consumo) =>
+        (consumo.pension?.pensionado?.nombreCompleto ?? '')
+          .toLowerCase()
+          .includes(busquedaNombre.value.toLowerCase()),
+      );
+    }
+  }
+
+  if (tipoFiltro.value === 'fecha' || tipoFiltro.value === 'todos') {
+    if (busquedaFecha.value) {
+      const fechaSeleccionada = new Date(busquedaFecha.value);
+      fechaSeleccionada.setHours(0, 0, 0, 0);
+
+      resultado = resultado.filter((consumo) => {
+        const fechaConsumo = new Date(consumo.fecha);
+        fechaConsumo.setHours(0, 0, 0, 0);
+        return fechaConsumo.getTime() === fechaSeleccionada.getTime();
+      });
+    }
+  }
+
+  return resultado;
+});
 
 const pensionesOpciones = computed(() =>
   pensiones.value.map((pension) => ({
     ...pension,
-    descripcion: `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - ${pension.completosDisponibles} disponibles`,
+    descripcion: `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'}`,
   })),
 );
 
-const opcionesMenuOpciones = computed(() =>
-  opcionesMenu.value.map((opcion) => ({
+const opcionesMenuOpciones = computed(() => {
+  let opciones = opcionesMenu.value;
+  if (fecha.value) {
+    opciones = opciones.filter(
+      (opcion) => opcion.menu?.fecha === fecha.value,
+    );
+  }
+  return opciones.map((opcion) => ({
     ...opcion,
-    descripcion: `${opcion.menu?.fecha ?? 'Sin fecha'} - ${opcion.nombreSegundo}`,
-  })),
-);
+    descripcion: `${opcion.nombreSegundo}`,
+  }));
+});
 
 const pensionSeleccionada = computed(() =>
   pensiones.value.find((pension) => pension.id === idPension.value),
@@ -292,6 +334,66 @@ onMounted(cargarDatos);
       {{ errorMensaje }}
     </Message>
 
+    <!-- Buscador Avanzado -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem; min-width: 100px;">
+            Filtrar por:
+          </label>
+          <Select
+            v-model="tipoFiltro"
+            :options="[
+              { label: 'Nombre', value: 'nombre' },
+              { label: 'Fecha', value: 'fecha' },
+              { label: 'Nombre y Fecha', value: 'todos' },
+            ]"
+            optionLabel="label"
+            optionValue="value"
+            style="flex: 1;"
+            fluid
+          />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div
+            v-if="tipoFiltro === 'nombre' || tipoFiltro === 'todos'"
+            style="display: flex; align-items: center; gap: 0.75rem;"
+          >
+            <i class="pi pi-search" style="color: #94a3b8;"></i>
+            <InputText
+              v-model="busquedaNombre"
+              placeholder="Buscar por nombre..."
+              style="padding: 0.75rem 1rem; flex: 1;"
+              fluid
+            />
+          </div>
+
+          <div
+            v-if="tipoFiltro === 'fecha' || tipoFiltro === 'todos'"
+            style="display: flex; align-items: center; gap: 0.75rem;"
+          >
+            <i class="pi pi-calendar" style="color: #94a3b8;"></i>
+            <Calendar
+              v-model="busquedaFecha"
+              dateFormat="dd/mm/yy"
+              placeholder="Seleccionar fecha..."
+              style="flex: 1;"
+              showIcon
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tabla Principal -->
     <div
       style="
@@ -303,7 +405,7 @@ onMounted(cargarDatos);
       "
     >
       <DataTable
-        :value="consumos"
+        :value="consumosFiltrados"
         stripedRows
         paginator
         :rows="10"
@@ -402,9 +504,6 @@ onMounted(cargarDatos);
             placeholder="Seleccione una pensión"
             fluid
           />
-          <small v-if="pensionSeleccionada" style="color: #10b981; font-weight: 600; margin-top: 0.1rem;">
-            * Cuenta con {{ pensionSeleccionada.completosDisponibles }} platos disponibles.
-          </small>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">

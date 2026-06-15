@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
@@ -8,6 +8,8 @@ import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import Tag from 'primevue/tag';
+import InputNumber from 'primevue/inputnumber';
+import Message from 'primevue/message';
 
 import api from '../api/axios';
 
@@ -20,6 +22,14 @@ const pensioneFiltradas = computed(() => {
   return pensiones.value.filter((pension) =>
     pension.pensionado?.nombreCompleto?.toLowerCase().includes(busquedaPensionado.value.toLowerCase()) || false,
   );
+});
+
+const pensionadosFiltrados = computed(() => {
+  if (!pensionados.value.length) return [];
+  const idsConPension = pensiones.value
+    .filter((p) => !modoEdicion.value || p.id !== pensionId.value)
+    .map((p) => p.pensionado?.id || p.idPensionado);
+  return pensionados.value.filter((p) => !idsConPension.includes(p.id));
 });
 
 const visible = ref(false);
@@ -42,6 +52,25 @@ const cargarPensiones = async () => {
   try {
     const response = await api.get('/pensiones');
     pensiones.value = response.data;
+    
+    // Actualizar automáticamente a AGOTADA si completosDisponibles es 0
+    for (const pension of pensiones.value) {
+      if (pension.completosDisponibles === 0 && pension.estado !== 'AGOTADA') {
+        try {
+          const payload = {
+            fechaInicio: pension.fechaInicio,
+            cantidadCompletos: pension.cantidadCompletos,
+            completosDisponibles: pension.completosDisponibles,
+            estado: 'AGOTADA',
+            idPensionado: pension.pensionado?.id || pension.idPensionado,
+          };
+          await api.patch(`/pensiones/${pension.id}`, payload);
+          pension.estado = 'AGOTADA';
+        } catch (error) {
+          console.error(`Error al actualizar pensión ${pension.id}:`, error);
+        }
+      }
+    }
   } catch (error) {
     console.error(error);
   }
@@ -117,22 +146,37 @@ const guardarPension = async () => {
       ),
     };
 
+    let response;
     if (modoEdicion.value) {
-      await api.patch(
+      response = await api.patch(
         `/pensiones/${pensionId.value}`,
         payload,
       );
     } else {
-      await api.post(
+      response = await api.post(
         '/pensiones',
         payload,
       );
     }
 
+    const pensionGuardada = response.data;
     visible.value = false;
 
-    limpiarFormulario();
+    if (!modoEdicion.value) {
+      const pensionadoObj = pensionados.value.find((p) => p.id === payload.idPensionado);
+      pensionSeleccionadaParaPago.value = {
+        ...pensionGuardada,
+        pensionado: pensionadoObj,
+      };
+      idPensionPago.value = pensionGuardada.id;
+      fechaPago.value = obtenerFechaLocal();
+      precioUnitario.value = precioPensionadoSugerido.value;
+      montoTotal.value = null;
+      errorMensajePago.value = '';
+      visiblePago.value = true;
+    }
 
+    limpiarFormulario();
     await cargarPensiones();
 
   } catch (error) {
@@ -166,7 +210,6 @@ const getEstadoSeverity = (estadoStr: string) => {
       return 'success';
     case 'AGOTADA':
       return 'danger';
-    case 'INACTIVA':
     default:
       return 'secondary';
   }
@@ -185,9 +228,99 @@ const formatFecha = (fechaStr: string) => {
   return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
 };
 
+watch(cantidadCompletos, (newVal) => {
+  if (!modoEdicion.value) {
+    completosDisponibles.value = newVal;
+  }
+});
+
+// Estado para el diálogo de registro de pago
+const visiblePago = ref(false);
+const guardandoPago = ref(false);
+const errorMensajePago = ref('');
+
+const fechaPago = ref('');
+const precioUnitario = ref<number | null>(null);
+const montoTotal = ref<number | null>(null);
+const idPensionPago = ref<number | null>(null);
+const pensionSeleccionadaParaPago = ref<any>(null);
+
+const obtenerFechaLocal = () => {
+  const fecha = new Date();
+  const desplazamiento = fecha.getTimezoneOffset() * 60_000;
+  return new Date(fecha.getTime() - desplazamiento).toISOString().slice(0, 10);
+};
+
+const formularioPagoValido = computed(
+  () =>
+    Boolean(fechaPago.value) &&
+    idPensionPago.value !== null &&
+    precioUnitario.value !== null &&
+    precioUnitario.value >= 0 &&
+    montoTotal.value !== null &&
+    montoTotal.value >= 0,
+);
+
+const guardarPago = async () => {
+  if (!formularioPagoValido.value) {
+    errorMensajePago.value = 'Complete todos los campos requeridos.';
+    return;
+  }
+
+  guardandoPago.value = true;
+  errorMensajePago.value = '';
+
+  const payload = {
+    fechaPago: new Date(fechaPago.value + 'T00:00:00.000Z').toISOString(),
+    precioUnitario: Number(precioUnitario.value),
+    montoTotal: Number(montoTotal.value),
+    idPension: Number(idPensionPago.value),
+  };
+
+  try {
+    await api.post('/pagos', payload);
+    visiblePago.value = false;
+    await cargarPensiones();
+  } catch (error) {
+    console.error(error);
+    const posibleError = error as {
+      response?: { data?: { message?: string | string[] } };
+    };
+    const mensaje = posibleError.response?.data?.message;
+    errorMensajePago.value = Array.isArray(mensaje)
+      ? mensaje.join('. ')
+      : (mensaje ?? 'No se pudo registrar el pago.');
+  } finally {
+    guardandoPago.value = false;
+  }
+};
+
+const precioPensionadoSugerido = ref<number | null>(null);
+
+const cargarConfiguracion = async () => {
+  try {
+    const response = await api.get('/configuracion');
+    const config = Array.isArray(response.data) ? response.data[0] : response.data;
+    if (config) {
+      precioPensionadoSugerido.value = Number(config.precioPensionado);
+    }
+  } catch (error) {
+    console.error('Error al cargar configuración:', error);
+  }
+};
+
+watch(precioUnitario, (newPrecio) => {
+  if (newPrecio === null || !pensionSeleccionadaParaPago.value) {
+    montoTotal.value = null;
+    return;
+  }
+  montoTotal.value = newPrecio * Number(pensionSeleccionadaParaPago.value.cantidadCompletos);
+});
+
 onMounted(async () => {
   await cargarPensionados();
   await cargarPensiones();
+  await cargarConfiguracion();
 });
 </script>
 
@@ -363,7 +496,7 @@ onMounted(async () => {
           <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensionado</label>
           <Select
             v-model="idPensionado"
-            :options="pensionados"
+            :options="pensionadosFiltrados"
             optionLabel="nombreCompleto"
             optionValue="id"
             placeholder="Seleccione un pensionado"
@@ -403,6 +536,7 @@ onMounted(async () => {
               v-model="completosDisponibles"
               placeholder="Ej. 20"
               style="padding: 0.75rem 1rem;"
+              disabled
             />
           </div>
         </div>
@@ -411,15 +545,15 @@ onMounted(async () => {
           <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Estado</label>
           <Select
             v-model="estado"
-            :options="['ACTIVA', 'INACTIVA', 'AGOTADA']"
+            :options="['ACTIVA', 'AGOTADA']"
             placeholder="Estado de la pensión"
             fluid
           />
         </div>
 
         <Button
-          label="Guardar"
-          icon="pi pi-save"
+          :label="modoEdicion ? 'Guardar' : 'Guardar y pasar al pago'"
+          :icon="modoEdicion ? 'pi pi-save' : 'pi pi-credit-card'"
           style="margin-top: 0.5rem; padding: 0.75rem;"
           fluid
           @click="guardarPension"
@@ -463,6 +597,93 @@ onMounted(async () => {
             @click="eliminarPensionConfirmado"
           />
         </div>
+      </div>
+    </Dialog>
+
+    <!-- Dialogo de Registro de Pago (después de nueva pensión) -->
+    <Dialog
+      v-model:visible="visiblePago"
+      modal
+      header="Registrar Pago de Pensión"
+      :style="{ width: '480px' }"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
+        <Message
+          v-if="errorMensajePago"
+          severity="error"
+          :closable="false"
+          style="margin-bottom: 0.5rem;"
+        >
+          {{ errorMensajePago }}
+        </Message>
+
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensión</label>
+          <InputText
+            :value="pensionSeleccionadaParaPago ? `${pensionSeleccionadaParaPago.pensionado?.nombreCompleto || 'Pensionado'} - Pensión #${pensionSeleccionadaParaPago.id}` : ''"
+            disabled
+            style="padding: 0.75rem 1rem;"
+          />
+          <small v-if="pensionSeleccionadaParaPago" style="color: #3b82f6; font-weight: 600; margin-top: 0.1rem;">
+            * Incluye un total de {{ pensionSeleccionadaParaPago.cantidadCompletos }} completos.
+          </small>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha de Pago</label>
+          <input
+            v-model="fechaPago"
+            type="date"
+            style="
+              width: 100%;
+              box-sizing: border-box;
+              padding: 0.75rem 1rem;
+              border: 1px solid #cbd5e1;
+              border-radius: 6px;
+              font-family: inherit;
+              font-size: 0.95rem;
+              color: #334155;
+              outline: none;
+              transition: border-color 0.2s ease;
+            "
+          />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Precio por Completo</label>
+            <InputNumber
+              v-model="precioUnitario"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total</label>
+            <InputNumber
+              v-model="montoTotal"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+        </div>
+
+        <Button
+          label="Guardar Registro de Pago"
+          icon="pi pi-save"
+          style="margin-top: 0.5rem; padding: 0.75rem;"
+          :loading="guardandoPago"
+          :disabled="!formularioPagoValido"
+          fluid
+          @click="guardarPago"
+        />
       </div>
     </Dialog>
   </div>

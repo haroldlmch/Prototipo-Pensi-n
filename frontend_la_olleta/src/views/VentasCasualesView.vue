@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 
 import Button from 'primevue/button';
+import Calendar from 'primevue/calendar';
 import Column from 'primevue/column';
 import DataTable from 'primevue/datatable';
 import Dialog from 'primevue/dialog';
@@ -19,6 +20,19 @@ interface VentaCasual {
 }
 
 const ventas = ref<VentaCasual[]>([]);
+const busquedaFecha = ref<Date | null>(null);
+
+const ventasFiltradas = computed(() => {
+  if (!busquedaFecha.value) return ventas.value;
+  const fechaSeleccionada = new Date(busquedaFecha.value);
+  fechaSeleccionada.setHours(0, 0, 0, 0);
+
+  return ventas.value.filter((venta) => {
+    const fechaVenta = new Date(venta.fecha);
+    fechaVenta.setHours(0, 0, 0, 0);
+    return fechaVenta.getTime() === fechaSeleccionada.getTime();
+  });
+});
 
 const visible = ref(false);
 const modoEdicion = ref(false);
@@ -71,13 +85,22 @@ const obtenerFechaLocal = () => {
 const convertirFechaISO = (valor: string) =>
   new Date(`${valor}T00:00:00.000Z`).toISOString();
 
+const precioCasualSugerido = ref<number | null>(null);
+
 const cargarVentas = async () => {
   cargando.value = true;
   errorMensaje.value = '';
 
   try {
-    const response = await api.get('/ventas-casuales');
-    ventas.value = response.data;
+    const [ventasResponse, configResponse] = await Promise.all([
+      api.get('/ventas-casuales'),
+      api.get('/configuracion'),
+    ]);
+    ventas.value = ventasResponse.data;
+    const config = Array.isArray(configResponse.data) ? configResponse.data[0] : configResponse.data;
+    if (config) {
+      precioCasualSugerido.value = Number(config.precioCasual);
+    }
   } catch (error) {
     errorMensaje.value = obtenerMensajeError(error);
   } finally {
@@ -97,6 +120,9 @@ const limpiarFormulario = () => {
 
 const nuevaVenta = () => {
   limpiarFormulario();
+  if (precioCasualSugerido.value !== null) {
+    precioUnitario.value = precioCasualSugerido.value;
+  }
   visible.value = true;
 };
 
@@ -236,6 +262,28 @@ onMounted(cargarVentas);
       {{ errorMensaje }}
     </Message>
 
+    <!-- Buscador -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <i class="pi pi-calendar" style="color: #94a3b8;"></i>
+        <Calendar
+          v-model="busquedaFecha"
+          dateFormat="dd/mm/yy"
+          placeholder="Seleccionar fecha..."
+          style="flex: 1;"
+          showIcon
+        />
+      </div>
+    </div>
+
     <!-- Tabla Principal -->
     <div
       style="
@@ -247,7 +295,7 @@ onMounted(cargarVentas);
       "
     >
       <DataTable
-        :value="ventas"
+        :value="ventasFiltradas"
         stripedRows
         paginator
         :rows="10"

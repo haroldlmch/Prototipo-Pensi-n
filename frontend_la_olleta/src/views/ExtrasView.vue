@@ -32,6 +32,20 @@ interface Extra {
 
 const extras = ref<Extra[]>([]);
 const pensiones = ref<Pension[]>([]);
+const busquedaPensionado = ref('');
+
+const extrasFiltrados = computed(() => {
+  if (!busquedaPensionado.value.trim()) return extras.value;
+  return extras.value.filter((extra) =>
+    (extra.pension?.pensionado?.nombreCompleto ?? '')
+      .toLowerCase()
+      .includes(busquedaPensionado.value.toLowerCase()),
+  );
+});
+
+const totalExtras = computed(() =>
+  extrasFiltrados.value.reduce((total, extra) => total + Number(extra.precio), 0),
+);
 
 const visible = ref(false);
 const modoEdicion = ref(false);
@@ -239,6 +253,27 @@ onMounted(cargarDatos);
       {{ errorMensaje }}
     </Message>
 
+    <!-- Buscador -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <i class="pi pi-search" style="color: #94a3b8;"></i>
+        <InputText
+          v-model="busquedaPensionado"
+          placeholder="Buscar por nombre de pensionado..."
+          style="padding: 0.75rem 1rem; flex: 1;"
+          fluid
+        />
+      </div>
+    </div>
+
     <!-- Tabla Principal -->
     <div
       style="
@@ -250,7 +285,7 @@ onMounted(cargarDatos);
       "
     >
       <DataTable
-        :value="extras"
+        :value="extrasFiltrados"
         stripedRows
         paginator
         :rows="10"

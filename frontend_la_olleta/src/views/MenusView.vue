@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 
 import Button from 'primevue/button';
+import Calendar from 'primevue/calendar';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Dialog from 'primevue/dialog';
@@ -10,13 +11,17 @@ import InputText from 'primevue/inputtext';
 import api from '../api/axios';
 
 const menus = ref<any[]>([]);
-const busquedaFecha = ref('');
+const busquedaFecha = ref<Date | null>(null);
 
 const menusFiltrados = computed(() => {
-  if (!busquedaFecha.value.trim()) return menus.value;
+  if (!busquedaFecha.value) return menus.value;
+  const fechaSeleccionada = new Date(busquedaFecha.value);
+  fechaSeleccionada.setHours(0, 0, 0, 0);
+
   return menus.value.filter((menu) => {
-    const fechaFormateada = formatFecha(menu.fecha);
-    return fechaFormateada.toLowerCase().includes(busquedaFecha.value.toLowerCase());
+    const fechaMenu = new Date(menu.fecha);
+    fechaMenu.setHours(0, 0, 0, 0);
+    return fechaMenu.getTime() === fechaSeleccionada.getTime();
   });
 });
 
@@ -176,12 +181,13 @@ onMounted(() => {
       "
     >
       <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <i class="pi pi-search" style="color: #94a3b8;"></i>
-        <InputText
+        <i class="pi pi-calendar" style="color: #94a3b8;"></i>
+        <Calendar
           v-model="busquedaFecha"
-          placeholder="Buscar por fecha..."
-          style="padding: 0.75rem 1rem; flex: 1;"
-          fluid
+          dateFormat="dd/mm/yy"
+          placeholder="Seleccionar fecha..."
+          style="flex: 1;"
+          showIcon
         />
       </div>
     </div>

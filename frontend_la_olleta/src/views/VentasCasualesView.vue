@@ -24,13 +24,14 @@ const busquedaFecha = ref<Date | null>(null);
 
 const ventasFiltradas = computed(() => {
   if (!busquedaFecha.value) return ventas.value;
-  const fechaSeleccionada = new Date(busquedaFecha.value);
-  fechaSeleccionada.setHours(0, 0, 0, 0);
+  
+  const fechaSeleccionada = new Date(busquedaFecha.value)
+    .toISOString()
+    .slice(0, 10);
 
   return ventas.value.filter((venta) => {
-    const fechaVenta = new Date(venta.fecha);
-    fechaVenta.setHours(0, 0, 0, 0);
-    return fechaVenta.getTime() === fechaSeleccionada.getTime();
+    const fechaVenta = new Date(venta.fecha).toISOString().slice(0, 10);
+    return fechaVenta === fechaSeleccionada;
   });
 });
 
@@ -82,8 +83,11 @@ const obtenerFechaLocal = () => {
   return new Date(actual.getTime() - desplazamiento).toISOString().slice(0, 10);
 };
 
-const convertirFechaISO = (valor: string) =>
-  new Date(`${valor}T00:00:00.000Z`).toISOString();
+const convertirFechaISO = (valor: string) => {
+  // valor es "2026-06-17" del input date
+  // Enviar como ISO string en UTC
+  return valor + 'T00:00:00.000Z';
+};
 
 const precioCasualSugerido = ref<number | null>(null);
 

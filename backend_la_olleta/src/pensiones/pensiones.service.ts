@@ -90,7 +90,7 @@ const pension =
     where: { id },
     relations: {
       pensionado: true,
-      pago: true,
+      pagos: true,
       consumos: true,
       extras: true,
     },

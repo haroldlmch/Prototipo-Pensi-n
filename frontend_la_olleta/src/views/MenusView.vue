@@ -15,13 +15,14 @@ const busquedaFecha = ref<Date | null>(null);
 
 const menusFiltrados = computed(() => {
   if (!busquedaFecha.value) return menus.value;
-  const fechaSeleccionada = new Date(busquedaFecha.value);
-  fechaSeleccionada.setHours(0, 0, 0, 0);
+  
+  const fechaSeleccionada = new Date(busquedaFecha.value)
+    .toISOString()
+    .slice(0, 10);
 
   return menus.value.filter((menu) => {
-    const fechaMenu = new Date(menu.fecha);
-    fechaMenu.setHours(0, 0, 0, 0);
-    return fechaMenu.getTime() === fechaSeleccionada.getTime();
+    const fechaMenu = new Date(menu.fecha).toISOString().slice(0, 10);
+    return fechaMenu === fechaSeleccionada;
   });
 });
 

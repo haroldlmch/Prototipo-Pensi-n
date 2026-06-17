@@ -36,11 +36,13 @@ const busquedaPensionado = ref('');
 
 const extrasFiltrados = computed(() => {
   if (!busquedaPensionado.value.trim()) return extras.value;
-  return extras.value.filter((extra) =>
-    (extra.pension?.pensionado?.nombreCompleto ?? '')
-      .toLowerCase()
-      .includes(busquedaPensionado.value.toLowerCase()),
-  );
+  
+  const busqueda = busquedaPensionado.value.toLowerCase().trim();
+  
+  return extras.value.filter((extra) => {
+    const nombreCompleto = (extra.pension?.pensionado?.nombreCompleto ?? '').toLowerCase().trim();
+    return nombreCompleto.includes(busqueda);
+  });
 });
 
 const totalExtras = computed(() =>

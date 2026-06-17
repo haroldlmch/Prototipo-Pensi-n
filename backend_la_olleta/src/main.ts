@@ -23,9 +23,9 @@ async function bootstrap() {
   await app.listen(port);
 
   console.log('====================================');
-  console.log('🚀 Sistema La O\'lleta iniciado');
-  console.log(`🌐 URL: http://localhost:${port}`);
-  console.log('📦 PostgreSQL conectado');
+  console.log('Sistema La O\'lleta iniciado');
+  console.log(`URL: http://localhost:${port}`);
+  console.log('PostgreSQL conectado');
   console.log('====================================');
 }
 bootstrap();

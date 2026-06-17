@@ -21,6 +21,8 @@ interface Pension {
   id: number;
   fechaInicio: string;
   cantidadCompletos: number;
+  completosDisponibles: number;
+  estado: string;
   pensionado?: Pensionado;
 }
 
@@ -41,13 +43,18 @@ const pensiones = ref<Pension[]>([]);
 const busquedaPensionado = ref('');
 
 const pagosFiltrados = computed(() => {
-  if (!busquedaPensionado.value.trim()) return pagos.value;
-  return pagos.value.filter((pago) =>
-    (pago.pension?.pensionado?.nombreCompleto ?? '')
-      .toLowerCase()
-      .includes(busquedaPensionado.value.toLowerCase()),
-  );
+  const busqueda = busquedaPensionado.value.trim().toLowerCase();
+  if (!busqueda) return pagos.value;
+  
+  return pagos.value.filter((pago) => {
+    const nombre = (pago.pension?.pensionado?.nombreCompleto ?? '').toLowerCase().trim();
+    return nombre.includes(busqueda);
+  });
 });
+
+const totalMontoRecibido = computed(() =>
+  pagosFiltrados.value.reduce((total, pago) => total + Number(pago.montoTotal), 0),
+);
 
 const visible = ref(false);
 const modoEdicion = ref(false);
@@ -68,15 +75,22 @@ const idPension = ref<number | null>(null);
 
 const pensionesOpciones = computed<PensionOption[]>(() =>
   pensiones.value
-    .filter(
-      (pension) =>
-        pension.id === idPension.value ||
-        !pagos.value.some((pago) => pago.pension?.id === pension.id),
-    )
-    .map((pension) => ({
-      ...pension,
-      descripcion: `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - Pensión #${pension.id}`,
-    })),
+    .filter((pension) => {
+      // Mostrar si está seleccionada o si tiene completos agotados
+      const tieneCompletosAgotados = pension.completosDisponibles === 0 || pension.estado === 'AGOTADA';
+      return pension.id === idPension.value || tieneCompletosAgotados;
+    })
+    .map((pension) => {
+      const pagoExistente = pagos.value.find((pago) => pago.pension?.id === pension.id);
+      const descripcionBase = `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - Pensión #${pension.id}`;
+      const descripcion = pagoExistente 
+        ? `${descripcionBase} (Pago registrado)` 
+        : descripcionBase;
+      return {
+        ...pension,
+        descripcion,
+      };
+    }),
 );
 
 const pensionSeleccionada = computed(() =>
@@ -343,6 +357,14 @@ onMounted(cargarDatos);
           </template>
         </Column>
 
+        <Column header="Completos Pagados" style="width: 150px; text-align: center;">
+          <template #body="slotProps">
+            <span style="font-weight: 700; color: #3b82f6; font-size: 0.95rem;">
+              {{ slotProps.data.pension?.completosDisponibles ?? '-' }}
+            </span>
+          </template>
+        </Column>
+
         <Column header="Fecha de Pago" style="color: #475569; width: 140px;">
           <template #body="slotProps">
             {{ formatearFecha(slotProps.data.fechaPago) }}
@@ -386,6 +408,18 @@ onMounted(cargarDatos);
           </template>
         </Column>
       </DataTable>
+
+      <!-- Total de Monto Recibido -->
+      <div style="display: flex; justify-content: flex-end; margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid #e2e8f0;">
+        <div style="display: flex; flex-direction: column; gap: 0.5rem; text-align: right;">
+          <p style="margin: 0; color: #64748b; font-size: 0.95rem; font-weight: 600;">
+            Total de Monto Recibido:
+          </p>
+          <p style="margin: 0; color: #059669; font-size: 1.5rem; font-weight: 900;">
+            {{ formatearMonto(totalMontoRecibido) }}
+          </p>
+        </div>
+      </div>
     </div>
 
     <!-- Dialogo de Formulario -->

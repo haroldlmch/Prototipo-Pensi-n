@@ -41,6 +41,11 @@ if (!pension) {
   );
 }
 
+// Restaurar los completos disponibles a la cantidad original
+pension.completosDisponibles = pension.cantidadCompletos;
+pension.estado = 'ACTIVA';
+await this.pensionRepository.save(pension);
+
 const pago =
   this.pagoRepository.create({
     fechaPago:
@@ -67,7 +72,9 @@ async findAll() {
 
 return await this.pagoRepository.find({
   relations: {
-    pension: true,
+    pension: {
+      pensionado: true,
+    },
   },
   order: {
     id: 'DESC',
@@ -84,7 +91,9 @@ const pago =
   await this.pagoRepository.findOne({
     where: { id },
     relations: {
-      pension: true,
+      pension: {
+        pensionado: true,
+      },
     },
   });
 

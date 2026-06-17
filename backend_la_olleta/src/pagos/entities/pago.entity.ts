@@ -1,5 +1,5 @@
 import { Pensione } from "src/pensiones/entities/pensione.entity";
-import { Column, CreateDateColumn, Entity, JoinColumn, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity('pagos')
 export class Pago {
@@ -25,9 +25,9 @@ export class Pago {
   })
   montoTotal!: number;
 
-  @OneToOne(
+  @ManyToOne(
     () => Pensione,
-    (pension) => pension.pago,
+    (pension) => pension.pagos,
     {
       nullable: false,
       onDelete: 'CASCADE',

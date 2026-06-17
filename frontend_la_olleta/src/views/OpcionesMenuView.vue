@@ -6,7 +6,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
-import Select from 'primevue/select';
+import Calendar from 'primevue/calendar';
 
 import api from '../api/axios';
 
@@ -24,7 +24,8 @@ const mensajeEliminar = ref('');
 const eliminando = ref(false);
 
 const nombreSegundo = ref('');
-const idMenu = ref<number | null>(null);
+const menuFecha = ref<Date | null>(null);
+const fechaBusqueda = ref<Date | null>(null);
 
 const cargarOpciones = async () => {
   try {
@@ -47,7 +48,7 @@ const cargarMenus = async () => {
 const limpiarFormulario = () => {
   opcionId.value = null;
   nombreSegundo.value = '';
-  idMenu.value = null;
+  menuFecha.value = null;
   modoEdicion.value = false;
 };
 
@@ -58,19 +59,29 @@ const nuevoRegistro = () => {
 
 const editarRegistro = (opcion: any) => {
   opcionId.value = opcion.id;
-
   nombreSegundo.value = opcion.nombreSegundo;
-  idMenu.value = opcion.menu?.id;
-
+  menuFecha.value = opcion.menu?.fecha ? new Date(opcion.menu.fecha) : null;
   modoEdicion.value = true;
   visible.value = true;
 };
 
 const guardarRegistro = async () => {
   try {
+    // Buscar menú con la fecha seleccionada
+    const menuEncontrado = menus.value.find((m) => {
+      const fechaMenu = new Date(m.fecha).toISOString().slice(0, 10);
+      const fechaSeleccionada = menuFecha.value ? new Date(menuFecha.value).toISOString().slice(0, 10) : '';
+      return fechaMenu === fechaSeleccionada;
+    });
+
+    if (!menuEncontrado) {
+      console.error('No se encontró menú para la fecha seleccionada');
+      return;
+    }
+
     const payload = {
       nombreSegundo: nombreSegundo.value,
-      idMenu: Number(idMenu.value),
+      idMenu: menuEncontrado.id,
     };
 
     if (modoEdicion.value) {
@@ -86,9 +97,7 @@ const guardarRegistro = async () => {
     }
 
     visible.value = false;
-
     limpiarFormulario();
-
     await cargarOpciones();
   } catch (error) {
     console.error(error);
@@ -126,6 +135,18 @@ const menusOpciones = computed(() => {
     ...m,
     descripcion: `${formatFecha(m.fecha)} - Sopa: ${m.sopa}`,
   }));
+});
+
+const opcionesFiltradas = computed(() => {
+  if (!fechaBusqueda.value) {
+    return opciones.value;
+  }
+
+  const fechaSeleccionada = new Date(fechaBusqueda.value).toISOString().slice(0, 10);
+  return opciones.value.filter((opcion) => {
+    const fechaOpcion = new Date(opcion.menu?.fecha).toISOString().slice(0, 10);
+    return fechaOpcion === fechaSeleccionada;
+  });
 });
 
 onMounted(async () => {
@@ -171,6 +192,42 @@ onMounted(async () => {
       />
     </div>
 
+    <!-- Buscador por Fecha -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e2e8f0;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+      "
+    >
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <i class="pi pi-calendar" style="color: #94a3b8;"></i>
+        <div style="flex: 1;">
+          <label style="display: block; font-weight: 600; color: #475569; font-size: 0.85rem; margin-bottom: 0.5rem;">
+            Buscar por Fecha del Menú
+          </label>
+          <Calendar
+            v-model="fechaBusqueda"
+            dateFormat="dd/mm/yy"
+            placeholder="Seleccione una fecha"
+            :showIcon="true"
+            fluid
+          />
+        </div>
+        <Button
+          v-if="fechaBusqueda"
+          icon="pi pi-times"
+          severity="secondary"
+          text
+          rounded
+          @click="fechaBusqueda = null"
+          style="align-self: flex-end;"
+        />
+      </div>
+    </div>
+
     <!-- Contenedor Tabla -->
     <div
       style="
@@ -182,7 +239,7 @@ onMounted(async () => {
       "
     >
       <DataTable
-        :value="opciones"
+        :value="opcionesFiltradas"
         stripedRows
         paginator
         :rows="10"
@@ -267,13 +324,12 @@ onMounted(async () => {
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Menú Diario</label>
-          <Select
-            v-model="idMenu"
-            :options="menusOpciones"
-            optionLabel="descripcion"
-            optionValue="id"
-            placeholder="Seleccione el menú asociado"
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Menú Diario (Seleccionar Fecha)</label>
+          <Calendar
+            v-model="menuFecha"
+            dateFormat="dd/mm/yy"
+            placeholder="Seleccione la fecha del menú"
+            :showIcon="true"
             fluid
           />
         </div>

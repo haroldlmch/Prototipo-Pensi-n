@@ -1,10 +1,4 @@
-/* ============================================================
-   GLOBAL CSS — La O'lleta · Forzar Tema Claro
-   Este archivo reemplaza cualquier color oscuro heredado del
-   sistema operativo o de media queries de PrimeVue.
-   ============================================================ */
 
-/* --- Reset base --- */
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -23,7 +17,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* --- Forzar modo claro en PrimeVue aunque el SO esté en modo oscuro --- */
+
 :root {
   color-scheme: light !important;
 }

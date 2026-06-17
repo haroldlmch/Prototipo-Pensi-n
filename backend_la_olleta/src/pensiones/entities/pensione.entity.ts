@@ -43,11 +43,11 @@ export class Pensione {
   })
   pensionado!: Pensionado;
 
-  @OneToOne(
+  @OneToMany(
   () => Pago,
   (pago) => pago.pension,
 )
-pago!: Pago;
+pagos!: Pago[];
 
 @OneToMany(
   () => Consumo,

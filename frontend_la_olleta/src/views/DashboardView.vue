@@ -352,14 +352,6 @@ onMounted(() => {
                 </template>
               </Column>
               
-              <Column header="Opción Menú">
-                <template #body="slotProps">
-                  <span style="color: #475569;">
-                    {{ slotProps.data.opcionMenu?.nombre || 'Menú Especial' }}
-                  </span>
-                </template>
-              </Column>
-
               <Column field="tipoConsumo" header="Tipo">
                 <template #body="slotProps">
                   <Tag
@@ -620,7 +612,7 @@ onMounted(() => {
                   </span>
                 </div>
                 <div style="font-weight: 750; color: #059669; font-size: 0.95rem; white-space: nowrap;">
-                  ${{ formatDinero(pago.montoTotal) }}
+                  Bs. {{ formatDinero(pago.montoTotal) }}
                 </div>
               </div>
             </div>

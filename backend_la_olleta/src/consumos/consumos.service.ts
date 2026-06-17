@@ -106,7 +106,9 @@ async findAll() {
 
 return await this.consumoRepository.find({
   relations: {
-    pension: true,
+    pension: {
+      pensionado: true,
+    },
     opcionMenu: true,
   },
   order: {
@@ -124,7 +126,9 @@ const consumo =
   await this.consumoRepository.findOne({
     where: { id },
     relations: {
-      pension: true,
+      pension: {
+        pensionado: true,
+      },
       opcionMenu: true,
     },
   });

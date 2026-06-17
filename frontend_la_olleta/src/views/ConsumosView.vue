@@ -77,27 +77,25 @@ const tipoFiltro = ref('todos'); // 'nombre', 'fecha', 'todos'
 const consumosFiltrados = computed(() => {
   let resultado = consumos.value;
 
-  if (tipoFiltro.value === 'nombre' || tipoFiltro.value === 'todos') {
-    if (busquedaNombre.value.trim()) {
-      resultado = resultado.filter((consumo) =>
-        (consumo.pension?.pensionado?.nombreCompleto ?? '')
-          .toLowerCase()
-          .includes(busquedaNombre.value.toLowerCase()),
-      );
-    }
+  // Filtro por nombre
+  if (busquedaNombre.value.trim()) {
+    resultado = resultado.filter((consumo) =>
+      (consumo.pension?.pensionado?.nombreCompleto ?? '')
+        .toLowerCase()
+        .includes(busquedaNombre.value.toLowerCase()),
+    );
   }
 
-  if (tipoFiltro.value === 'fecha' || tipoFiltro.value === 'todos') {
-    if (busquedaFecha.value) {
-      const fechaSeleccionada = new Date(busquedaFecha.value);
-      fechaSeleccionada.setHours(0, 0, 0, 0);
+  // Filtro por fecha
+  if (busquedaFecha.value) {
+    const fechaSeleccionada = new Date(busquedaFecha.value)
+      .toISOString()
+      .slice(0, 10);
 
-      resultado = resultado.filter((consumo) => {
-        const fechaConsumo = new Date(consumo.fecha);
-        fechaConsumo.setHours(0, 0, 0, 0);
-        return fechaConsumo.getTime() === fechaSeleccionada.getTime();
-      });
-    }
+    resultado = resultado.filter((consumo) => {
+      const fechaConsumo = new Date(consumo.fecha).toISOString().slice(0, 10);
+      return fechaConsumo === fechaSeleccionada;
+    });
   }
 
   return resultado;
@@ -538,7 +536,7 @@ onMounted(cargarDatos);
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Opción de Menú (Sopa / Segundo)</label>
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Opción de Menú (Segundos)</label>
           <Select
             v-model="idOpcionMenu"
             :options="opcionesMenuOpciones"

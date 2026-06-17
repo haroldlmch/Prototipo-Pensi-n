@@ -71,7 +71,9 @@ async findAll() {
 
 return await this.extraRepository.find({
   relations: {
-    pension: true,
+    pension: {
+      pensionado: true,
+    },
   },
   order: {
     id: 'DESC',
@@ -88,7 +90,9 @@ const extra =
   await this.extraRepository.findOne({
     where: { id },
     relations: {
-      pension: true,
+      pension: {
+        pensionado: true,
+      },
     },
   });
 

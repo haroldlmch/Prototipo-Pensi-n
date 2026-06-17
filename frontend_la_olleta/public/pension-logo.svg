@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <!-- Círculo de fondo -->
+  <circle cx="100" cy="100" r="95" fill="#1e40af" opacity="0.1"/>
+  <circle cx="100" cy="100" r="90" fill="none" stroke="#1e40af" stroke-width="2"/>
+  
+  <!-- Casa (símbolo de estabilidad) -->
+  <path d="M 60 120 L 100 70 L 140 120 Z" fill="none" stroke="#1e40af" stroke-width="2.5"/>
+  <rect x="65" y="120" width="70" height="50" fill="none" stroke="#1e40af" stroke-width="2.5"/>
+  
+  <!-- Puerta -->
+  <rect x="90" y="120" width="20" height="30" fill="none" stroke="#1e40af" stroke-width="1.5"/>
+  
+  <!-- Monedas (símbolo de dinero/pensión) -->
+  <circle cx="80" cy="145" r="8" fill="#fbbf24" stroke="#1e40af" stroke-width="1.5"/>
+  <circle cx="80" cy="145" r="5" fill="none" stroke="#1e40af" stroke-width="1"/>
+  <line x1="80" y1="141" x2="80" y2="149" stroke="#1e40af" stroke-width="1"/>
+  
+  <circle cx="120" cy="150" r="8" fill="#fbbf24" stroke="#1e40af" stroke-width="1.5"/>
+  <circle cx="120" cy="150" r="5" fill="none" stroke="#1e40af" stroke-width="1"/>
+  <line x1="120" y1="146" x2="120" y2="154" stroke="#1e40af" stroke-width="1"/>
+  
+  <!-- Reloj de arena/tiempo (símbolo de jubilación) -->
+  <path d="M 130 85 L 145 95 L 130 105 Z" fill="none" stroke="#1e40af" stroke-width="1.5"/>
+  <path d="M 135 90 L 137 100" stroke="#1e40af" stroke-width="1" stroke-linecap="round"/>
+</svg>

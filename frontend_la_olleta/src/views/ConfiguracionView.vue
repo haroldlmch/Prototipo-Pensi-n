@@ -11,7 +11,6 @@ interface Configuracion {
   id: number;
   precioPensionado: number | string;
   precioCasual: number | string;
-  precioExtra: number | string;
   saldoBajoAlerta: number;
   fechaActualizacion?: string;
 }
@@ -19,7 +18,6 @@ interface Configuracion {
 const configuracionId = ref<number | null>(null);
 const precioPensionado = ref<number | null>(null);
 const precioCasual = ref<number | null>(null);
-const precioExtra = ref<number | null>(null);
 const saldoBajoAlerta = ref<number | null>(null);
 const fechaActualizacion = ref('');
 
@@ -35,8 +33,6 @@ const formularioValido = computed(
     precioPensionado.value >= 0 &&
     precioCasual.value !== null &&
     precioCasual.value >= 0 &&
-    precioExtra.value !== null &&
-    precioExtra.value >= 0 &&
     saldoBajoAlerta.value !== null &&
     saldoBajoAlerta.value >= 0,
 );
@@ -64,7 +60,6 @@ const cargarConfiguracion = async () => {
     configuracionId.value = datos.id;
     precioPensionado.value = Number(datos.precioPensionado);
     precioCasual.value = Number(datos.precioCasual);
-    precioExtra.value = Number(datos.precioExtra);
     saldoBajoAlerta.value = datos.saldoBajoAlerta;
     fechaActualizacion.value = datos.fechaActualizacion ?? '';
   } catch (error) {
@@ -89,7 +84,6 @@ const guardarConfiguracion = async () => {
     const response = await api.patch(`/configuracion/${configuracionId.value}`, {
       precioPensionado: Number(precioPensionado.value),
       precioCasual: Number(precioCasual.value),
-      precioExtra: Number(precioExtra.value),
       saldoBajoAlerta: Number(saldoBajoAlerta.value),
     });
 
@@ -188,17 +182,7 @@ onMounted(cargarConfiguracion);
             />
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label class="campo-label">Precio sugerido para extras</label>
-            <InputNumber
-              v-model="precioExtra"
-              mode="currency"
-              currency="BOB"
-              locale="es-BO"
-              :min="0"
-              fluid
-            />
-          </div>
+
         </div>
       </div>
 

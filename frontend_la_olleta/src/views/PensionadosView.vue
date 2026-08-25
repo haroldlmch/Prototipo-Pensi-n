@@ -322,7 +322,7 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.25rem 1.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         display: flex;
@@ -351,7 +351,7 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
       "
@@ -371,13 +371,13 @@ onMounted(() => {
           </div>
         </template>
 
-        <Column field="nombreCompleto" header="Nombre Completo" style="font-weight: 600; color: #1e293b;">
+        <Column field="nombreCompleto" header="Nombre Completo" style="min-width: 220px; max-width: 280px; text-align: left;">
           <template #body="slotProps">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <div
                 style="
-                  background: #e2e8f0;
-                  color: #334155;
+                  background: #eff6ff;
+                  color: #2563eb;
                   width: 34px;
                   height: 34px;
                   border-radius: 50%;
@@ -386,26 +386,29 @@ onMounted(() => {
                   justify-content: center;
                   font-weight: 700;
                   font-size: 0.85rem;
+                  flex-shrink: 0;
                 "
               >
                 {{ slotProps.data.nombreCompleto.charAt(0).toUpperCase() }}
               </div>
-              <span>{{ slotProps.data.nombreCompleto }}</span>
+              <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                {{ slotProps.data.nombreCompleto }}
+              </span>
             </div>
           </template>
         </Column>
 
-        <Column field="telefono" header="Teléfono" style="color: #475569;">
+        <Column field="telefono" header="Teléfono" style="width: 160px; text-align: center;">
           <template #body="slotProps">
-            <span v-if="slotProps.data.telefono">
-              <i class="pi pi-phone" style="font-size: 0.8rem; margin-right: 0.35rem; color: #64748b;"></i>
-              {{ slotProps.data.telefono }}
+            <span v-if="slotProps.data.telefono" style="display: inline-flex; align-items: center; gap: 0.35rem; color: #475569;">
+              <i class="pi pi-phone" style="font-size: 0.8rem; color: #64748b;"></i>
+              <span>{{ slotProps.data.telefono }}</span>
             </span>
             <span v-else style="color: #94a3b8; font-style: italic;">Sin teléfono</span>
           </template>
         </Column>
 
-        <Column field="estado" header="Estado" style="width: 120px; text-align: center;">
+        <Column field="estado" header="Estado" style="width: 110px; text-align: center;">
           <template #body="slotProps">
             <Tag
               :value="slotProps.data.estado ? 'Activo' : 'Inactivo'"
@@ -415,32 +418,34 @@ onMounted(() => {
           </template>
         </Column>
 
-        <Column header="Acciones y Ficha" style="width: 220px; text-align: center;">
+        <Column header="Acciones y Ficha" style="width: 230px; text-align: center; white-space: nowrap;">
           <template #body="slotProps">
-            <Button
-              label="Ver Ficha"
-              icon="pi pi-id-card"
-              severity="info"
-              size="small"
-              style="margin-right: 0.4rem; padding: 0.4rem 0.65rem; font-size: 0.8rem;"
-              @click="verFicha360(slotProps.data)"
-            />
-            <Button
-              icon="pi pi-pencil"
-              severity="warning"
-              text
-              rounded
-              title="Editar Pensionado"
-              @click="editarPensionado(slotProps.data)"
-            />
-            <Button
-              icon="pi pi-trash"
-              severity="danger"
-              text
-              rounded
-              title="Eliminar Pensionado"
-              @click="confirmarEliminar(slotProps.data.id)"
-            />
+            <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; white-space: nowrap;">
+              <Button
+                label="Ver Ficha"
+                icon="pi pi-address-book"
+                severity="info"
+                size="small"
+                style="padding: 0.35rem 0.65rem; font-size: 0.8rem; font-weight: 700; white-space: nowrap;"
+                @click="verFicha360(slotProps.data)"
+              />
+              <Button
+                icon="pi pi-pencil"
+                severity="warning"
+                text
+                rounded
+                title="Editar Pensionado"
+                @click="editarPensionado(slotProps.data)"
+              />
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                title="Eliminar Pensionado"
+                @click="confirmarEliminar(slotProps.data.id)"
+              />
+            </div>
           </template>
         </Column>
       </DataTable>
@@ -464,7 +469,7 @@ onMounted(() => {
           v-if="pensioneActivaFicha"
           style="
             background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            border: 1px solid #fed7aa;
             border-radius: 12px;
             padding: 1.25rem;
             display: flex;

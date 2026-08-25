@@ -208,6 +208,31 @@ const formatFecha = (fechaStr: string) => {
   });
 };
 
+const paletaColoresPlatos = [
+  { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' }, // Naranja cálido
+  { bg: '#ecfdf5', text: '#047857', border: '#a7f3d0' }, // Verde esmeralda
+  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' }, // Azul suave
+  { bg: '#fdf4ff', text: '#a21caf', border: '#f5d0fe' }, // Fucsia
+  { bg: '#fefce8', text: '#a16207', border: '#fef08a' }, // Ámbar dorado
+  { bg: '#f0fdfa', text: '#0f766e', border: '#99f6e4' }, // Turquesa
+  { bg: '#fdf2f8', text: '#be185d', border: '#fbcfe8' }, // Rosa
+  { bg: '#faf5ff', text: '#7e22ce', border: '#e9d5ff' }, // Violeta
+];
+
+const obtenerEstiloPlato = (indice: number | string) => {
+  const numIndice = typeof indice === 'number' ? indice : Number(indice) || 0;
+  const estilo = paletaColoresPlatos[Math.abs(numIndice) % paletaColoresPlatos.length] || paletaColoresPlatos[0]!;
+  return {
+    background: estilo.bg,
+    color: estilo.text,
+    border: `1px solid ${estilo.border}`,
+    fontWeight: '700',
+    fontSize: '0.82rem',
+    padding: '0.3rem 0.65rem',
+    borderRadius: '9999px',
+  };
+};
+
 onMounted(() => {
   cargarMenus();
 });
@@ -216,27 +241,20 @@ onMounted(() => {
 <template>
   <div style="display: flex; flex-direction: column; gap: 1.5rem;">
     <!-- Cabecera -->
-    <div
-      style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-      "
-    >
+    <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h1
           style="
             margin: 0;
             font-size: 2rem;
             font-weight: 800;
-            color: #0f172a;
+            color: #1c1917;
             letter-spacing: -0.025em;
           "
         >
-          Menús del Día
+          Menú del Día
         </h1>
-        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+        <p style="margin: 0.25rem 0 0 0; color: #78716c; font-size: 0.95rem; font-weight: 500;">
           Planificación unificada de la sopa y los platos fuertes (segundos) por fecha.
         </p>
       </div>
@@ -244,8 +262,14 @@ onMounted(() => {
       <Button
         label="Nuevo Menú del Día"
         icon="pi pi-plus"
-        severity="success"
         raised
+        style="
+          background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+          border: none !important;
+          color: white !important;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important;
+        "
         @click="nuevoMenu"
       />
     </div>
@@ -255,9 +279,9 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.25rem 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
         display: flex;
         gap: 1rem;
         align-items: center;
@@ -265,7 +289,7 @@ onMounted(() => {
       "
     >
       <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 250px;">
-        <i class="pi pi-search" style="color: #94a3b8;"></i>
+        <i class="pi pi-search" style="color: #a8a29e;"></i>
         <InputText
           v-model="busquedaTexto"
           placeholder="Buscar por sopa o plato fuerte..."
@@ -274,7 +298,7 @@ onMounted(() => {
       </div>
 
       <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 220px;">
-        <i class="pi pi-calendar" style="color: #94a3b8;"></i>
+        <i class="pi pi-calendar" style="color: #a8a29e;"></i>
         <Calendar
           v-model="busquedaFecha"
           dateFormat="dd/mm/yy"
@@ -299,9 +323,9 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
       "
     >
       <DataTable
@@ -314,55 +338,47 @@ onMounted(() => {
         class="p-datatable-sm"
       >
         <template #empty>
-          <div style="text-align: center; padding: 2rem; color: #94a3b8;">
-            <i class="pi pi-info-circle" style="font-size: 1.5rem; margin-bottom: 0.5rem;"></i>
-            <p style="margin: 0;">No se encontraron menús registrados</p>
+          <div style="text-align: center; padding: 2rem; color: #a8a29e;">
+            <p style="margin: 0; font-weight: 500;">No se encontraron menús registrados</p>
           </div>
         </template>
 
         <Column
           header="Fecha"
-          style="font-weight: 600; color: #1e293b; width: 230px;"
+          style="font-weight: 700; color: #1c1917; width: 230px; text-align: center;"
         >
           <template #body="slotProps">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <i class="pi pi-calendar-clock" style="color: #3b82f6;"></i>
-              <span style="text-transform: capitalize;">
-                {{ formatFecha(slotProps.data.fecha) }}
-              </span>
-            </div>
+            <span style="text-transform: capitalize;">
+              {{ formatFecha(slotProps.data.fecha) }}
+            </span>
           </template>
         </Column>
 
         <Column
           header="Sopa del Día"
-          style="font-weight: 500; color: #334155; width: 220px;"
+          style="font-weight: 600; color: #1c1917; width: 220px; text-align: center;"
         >
           <template #body="slotProps">
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 1.1rem;">🍲</span>
-              <strong>{{ slotProps.data.sopa }}</strong>
-            </div>
+            <span>{{ slotProps.data.sopa }}</span>
           </template>
         </Column>
 
         <Column
           header="Platos Fuertes / Segundos Disponibles"
-          style="color: #475569;"
+          style="color: #44403c; text-align: center;"
         >
           <template #body="slotProps">
-            <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 0.45rem; flex-wrap: wrap; text-align: center;">
               <Tag
-                v-for="opcion in slotProps.data.opcionesMenu || []"
+                v-for="(opcion, index) in slotProps.data.opcionesMenu || []"
                 :key="opcion.id || opcion.nombreSegundo"
                 :value="opcion.nombreSegundo"
-                severity="info"
                 rounded
-                style="font-weight: 500; font-size: 0.85rem; padding: 0.35rem 0.75rem;"
+                :style="obtenerEstiloPlato(index)"
               />
               <span
                 v-if="!slotProps.data.opcionesMenu || slotProps.data.opcionesMenu.length === 0"
-                style="color: #94a3b8; font-size: 0.85rem; font-style: italic;"
+                style="color: #a8a29e; font-size: 0.85rem; font-style: italic;"
               >
                 Sin platos configurados
               </span>
@@ -409,7 +425,7 @@ onMounted(() => {
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">
+            <label style="font-weight: 700; color: #44403c; font-size: 0.85rem;">
               Fecha del Menú *
             </label>
             <input
@@ -418,17 +434,18 @@ onMounted(() => {
               style="
                 width: 100%;
                 padding: 0.7rem 0.9rem;
-                border: 1px solid #cbd5e1;
+                border: 1px solid #fed7aa;
                 border-radius: 8px;
                 font-family: inherit;
                 box-sizing: border-box;
                 font-size: 0.95rem;
+                background: #fafaf9;
               "
             />
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">
+            <label style="font-weight: 700; color: #44403c; font-size: 0.85rem;">
               Sopa del Día *
             </label>
             <InputText
@@ -442,20 +459,21 @@ onMounted(() => {
         <!-- Sección de Opciones de Platos Fuertes (Detalle) -->
         <div
           style="
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
+            background: #fafaf9;
+            border: 1px solid #fed7aa;
             border-radius: 12px;
-            padding: 1rem;
+            padding: 1.15rem;
             display: flex;
             flex-direction: column;
             gap: 0.75rem;
           "
         >
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-weight: 700; color: #1e293b; font-size: 0.95rem;">
-              🍽️ Platos Fuertes / Segundos del Menú
+            <span style="font-weight: 800; color: #1c1917; font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem;">
+              <i class="pi pi-clipboard" style="color: #ea580c;"></i>
+              Platos Fuertes / Segundos del Menú
             </span>
-            <span style="font-size: 0.8rem; color: #64748b;">
+            <span style="font-size: 0.8rem; color: #78716c; font-weight: 600;">
               {{ listaOpciones.length }} plato(s)
             </span>
           </div>
@@ -471,7 +489,7 @@ onMounted(() => {
             <Button
               label="Agregar"
               icon="pi pi-plus"
-              severity="info"
+              style="background: #ea580c; border: none; color: white; font-weight: 700;"
               @click="agregarOpcion"
             />
           </div>
@@ -489,7 +507,7 @@ onMounted(() => {
                 align-items: center;
                 justify-content: space-between;
                 background: white;
-                border: 1px solid #e2e8f0;
+                border: 1px solid #fed7aa;
                 border-radius: 8px;
                 padding: 0.5rem 0.75rem;
               "
@@ -497,9 +515,9 @@ onMounted(() => {
               <div style="display: flex; align-items: center; gap: 0.5rem;">
                 <span
                   style="
-                    background: #e0e7ff;
-                    color: #4338ca;
-                    font-weight: 700;
+                    background: #ffedd5;
+                    color: #ea580c;
+                    font-weight: 800;
                     border-radius: 50%;
                     width: 22px;
                     height: 22px;
@@ -511,7 +529,7 @@ onMounted(() => {
                 >
                   {{ idx + 1 }}
                 </span>
-                <span style="font-weight: 500; color: #334155;">{{ op }}</span>
+                <span style="font-weight: 600; color: #292524;">{{ op }}</span>
               </div>
 
               <Button
@@ -527,7 +545,7 @@ onMounted(() => {
           </div>
           <div
             v-else
-            style="text-align: center; padding: 0.75rem; color: #94a3b8; font-size: 0.85rem; font-style: italic;"
+            style="text-align: center; padding: 0.75rem; color: #a8a29e; font-size: 0.85rem; font-style: italic;"
           >
             No has agregado platos fuertes para este día aún.
           </div>
@@ -536,9 +554,16 @@ onMounted(() => {
         <Button
           label="Guardar Menú Completo"
           icon="pi pi-save"
-          severity="success"
           :loading="guardando"
-          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 600;"
+          style="
+            margin-top: 0.5rem;
+            padding: 0.85rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+            border: none !important;
+            color: white !important;
+            box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important;
+          "
           fluid
           @click="guardarMenu"
         />

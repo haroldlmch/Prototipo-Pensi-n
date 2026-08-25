@@ -354,8 +354,9 @@ onMounted(() => {
     <!-- Banner Menú del Día -->
     <div
       style="
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        background: linear-gradient(135deg, #1c1917 0%, #292524 100%);
         border-radius: 16px;
+        border: 1px solid #44403c;
         padding: 1.25rem 1.5rem;
         color: white;
         display: flex;
@@ -363,46 +364,45 @@ onMounted(() => {
         align-items: center;
         flex-wrap: wrap;
         gap: 1rem;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.25);
       "
     >
       <div style="display: flex; align-items: center; gap: 1rem;">
         <div
           style="
-            background: rgba(59, 130, 246, 0.2);
-            border: 1px solid rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
             width: 48px;
             height: 48px;
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            box-shadow: 0 4px 12px rgba(234, 88, 12, 0.4);
+            flex-shrink: 0;
           "
         >
-          🍲
+          <i class="pi pi-clipboard" style="font-size: 1.35rem; color: white;"></i>
         </div>
         <div>
-          <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700;">
+          <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: #a8a29e; font-weight: 700;">
             Menú del Día ({{ menuHoy ? formatFecha(menuHoy.fecha) : 'Hoy' }})
           </div>
-          <div style="font-size: 1.15rem; font-weight: 700; color: #f8fafc;">
-            Sopa: <span style="color: #60a5fa;">{{ menuHoy ? menuHoy.sopa : 'Sin menú configurado' }}</span>
+          <div style="font-size: 1.15rem; font-weight: 700; color: #fafaf9; margin-top: 0.15rem;">
+            Sopa: <span style="color: #f97316; font-weight: 800;">{{ menuHoy ? menuHoy.sopa : 'Sin menú configurado' }}</span>
           </div>
         </div>
       </div>
 
       <!-- Platos disponibles -->
       <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-        <span style="font-size: 0.85rem; color: #cbd5e1; font-weight: 600;">Platos Fuertes:</span>
+        <span style="font-size: 0.85rem; color: #d6d3d1; font-weight: 600;">Platos Fuertes:</span>
         <Tag
           v-for="op in (menuHoy?.opcionesMenu || [])"
           :key="op.id"
           :value="op.nombreSegundo"
-          severity="info"
-          style="padding: 0.4rem 0.85rem; font-size: 0.85rem; background: #3b82f6; color: white;"
+          style="padding: 0.4rem 0.85rem; font-size: 0.85rem; background: #ea580c; color: white; border-radius: 8px; font-weight: 700; border: none; box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);"
         />
-        <span v-if="!menuHoy?.opcionesMenu || menuHoy.opcionesMenu.length === 0" style="color: #94a3b8; font-size: 0.85rem;">
+        <span v-if="!menuHoy?.opcionesMenu || menuHoy.opcionesMenu.length === 0" style="color: #a8a29e; font-size: 0.85rem;">
           Configure el menú en la sección "Menú del Día"
         </span>
       </div>
@@ -413,22 +413,22 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 2px solid #e0e7ff;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.05);
+        box-shadow: 0 4px 12px -2px rgba(234, 88, 12, 0.06);
         display: flex;
         flex-direction: column;
         gap: 1.25rem;
       "
     >
       <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
-          <span style="font-size: 1.25rem;">⚡</span>
-          <h2 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #1e293b;">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <i class="pi pi-bolt" style="color: #ea580c; font-size: 1.25rem;"></i>
+          <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1c1917;">
             Marcación Rápida de Comedor (1-Clic)
           </h2>
         </div>
-        <span style="font-size: 0.85rem; color: #64748b;">
+        <span style="font-size: 0.85rem; color: #78716c; font-weight: 600;">
           {{ pensionesActivas.length }} pensionados con saldo activo
         </span>
       </div>
@@ -443,11 +443,11 @@ onMounted(() => {
       <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
         <!-- Columna 1: Buscar y Seleccionar Pensionado -->
         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">
+          <label style="font-weight: 700; color: #44403c; font-size: 0.85rem;">
             1. Seleccionar Pensionado Activo:
           </label>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <i class="pi pi-search" style="color: #94a3b8;"></i>
+            <i class="pi pi-search" style="color: #a8a29e;"></i>
             <InputText
               v-model="busquedaRapida"
               placeholder="Buscar pensionado por nombre..."
@@ -471,7 +471,7 @@ onMounted(() => {
               :key="p.id"
               style="
                 padding: 0.65rem 0.85rem;
-                border-radius: 8px;
+                border-radius: 10px;
                 cursor: pointer;
                 border: 1.5px solid;
                 display: flex;
@@ -481,16 +481,16 @@ onMounted(() => {
               "
               :style="
                 pensionRapidaSeleccionada?.id === p.id
-                  ? 'border-color: #3b82f6; background: #eff6ff;'
-                  : 'border-color: #e2e8f0; background: #f8fafc;'
+                  ? 'border-color: #ea580c; background: #fff7ed;'
+                  : 'border-color: #e7e5e4; background: #fafaf9;'
               "
               @click="seleccionarPensionRapida(p)"
             >
-              <div style="font-weight: 700; color: #1e293b; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              <div style="font-weight: 700; color: #1c1917; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 {{ p.pensionado?.nombreCompleto }}
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.75rem; color: #64748b;">Pensión #{{ p.id }}</span>
+                <span style="font-size: 0.75rem; color: #78716c;">Pensión #{{ p.id }}</span>
                 <Tag
                   :value="`${p.completosDisponibles} disp.`"
                   :severity="p.completosDisponibles <= 5 ? 'warn' : 'success'"
@@ -501,7 +501,7 @@ onMounted(() => {
             </div>
             <div
               v-if="pensionesFiltradasRapidas.length === 0"
-              style="grid-column: span 2; text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 1rem;"
+              style="grid-column: span 2; text-align: center; color: #a8a29e; font-size: 0.85rem; padding: 1rem;"
             >
               No se encontraron pensionados activos con saldo.
             </div>
@@ -511,7 +511,7 @@ onMounted(() => {
         <!-- Columna 2: Elegir Plato y Confirmar -->
         <div style="display: flex; flex-direction: column; gap: 0.75rem; justify-content: space-between;">
           <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">
+            <label style="font-weight: 700; color: #44403c; font-size: 0.85rem;">
               2. Plato Fuerte / Segundo a Servir:
             </label>
             <div style="display: flex; flex-direction: column; gap: 0.4rem;">
@@ -520,7 +520,7 @@ onMounted(() => {
                 :key="op.id"
                 style="
                   padding: 0.65rem 0.85rem;
-                  border-radius: 8px;
+                  border-radius: 10px;
                   border: 1.5px solid;
                   cursor: pointer;
                   display: flex;
@@ -530,22 +530,22 @@ onMounted(() => {
                 "
                 :style="
                   opcionRapidaSeleccionada?.id === op.id
-                    ? 'border-color: #10b981; background: #ecfdf5; font-weight: 700;'
-                    : 'border-color: #e2e8f0; background: white;'
+                    ? 'border-color: #ea580c; background: #fff7ed; font-weight: 700;'
+                    : 'border-color: #e7e5e4; background: white;'
                 "
                 @click="opcionRapidaSeleccionada = op"
               >
                 <i
                   :class="opcionRapidaSeleccionada?.id === op.id ? 'pi pi-check-circle' : 'pi pi-circle'"
-                  :style="opcionRapidaSeleccionada?.id === op.id ? 'color: #10b981;' : 'color: #94a3b8;'"
+                  :style="opcionRapidaSeleccionada?.id === op.id ? 'color: #ea580c;' : 'color: #a8a29e;'"
                 ></i>
-                <span style="color: #334155; font-size: 0.9rem;">{{ op.nombreSegundo }}</span>
+                <span style="color: #292524; font-size: 0.9rem;">{{ op.nombreSegundo }}</span>
               </div>
             </div>
 
             <!-- Tipo de consumo -->
             <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
-              <span style="font-size: 0.8rem; font-weight: 600; color: #64748b;">Modalidad:</span>
+              <span style="font-size: 0.8rem; font-weight: 700; color: #78716c;">Modalidad:</span>
               <Select
                 v-model="tipoConsumoRapido"
                 :options="tiposConsumo"
@@ -562,11 +562,19 @@ onMounted(() => {
                 : 'Seleccione un pensionado arriba'
             "
             icon="pi pi-check-circle"
-            severity="success"
+            severity="warn"
             raised
             :disabled="!pensionRapidaSeleccionada || !opcionRapidaSeleccionada"
             :loading="marcandoRapido"
-            style="padding: 0.85rem; font-weight: 700; font-size: 0.95rem;"
+            style="
+              padding: 0.85rem;
+              font-weight: 700;
+              font-size: 0.95rem;
+              background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+              border: none !important;
+              color: white !important;
+              box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important;
+            "
             @click="registrarConsumoRapido"
           />
         </div>
@@ -578,9 +586,9 @@ onMounted(() => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
         display: flex;
         flex-direction: column;
         gap: 1rem;

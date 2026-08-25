@@ -148,8 +148,8 @@ onMounted(cargarConfiguracion);
       <!-- Card: Precios -->
       <div class="config-card">
         <div class="config-card-header">
-          <div style="background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
-            <i class="pi pi-money-bill" style="font-size: 1.1rem;"></i>
+          <div style="background: linear-gradient(135deg, #ffedd5, #fed7aa); color: #ea580c; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(234, 88, 12, 0.2);">
+            <i class="pi pi-dollar" style="font-size: 1.1rem; font-weight: 700;"></i>
           </div>
           <div>
             <h2 class="config-card-title">Precios</h2>
@@ -189,7 +189,7 @@ onMounted(cargarConfiguracion);
       <!-- Card: Alertas -->
       <div class="config-card">
         <div class="config-card-header">
-          <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+          <div style="background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(217, 119, 6, 0.2);">
             <i class="pi pi-bell" style="font-size: 1.1rem;"></i>
           </div>
           <div>
@@ -209,9 +209,9 @@ onMounted(cargarConfiguracion);
             />
           </div>
 
-          <div style="background: #fef9c3; border: 1px solid #fde047; border-radius: 10px; padding: 0.85rem 1rem; display: flex; gap: 0.6rem; align-items: flex-start;">
-            <i class="pi pi-info-circle" style="color: #ca8a04; font-size: 1rem; margin-top: 0.1rem;"></i>
-            <span style="font-size: 0.85rem; color: #92400e; line-height: 1.5;">
+          <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 0.85rem 1rem; display: flex; gap: 0.6rem; align-items: flex-start;">
+            <i class="pi pi-info-circle" style="color: #ea580c; font-size: 1rem; margin-top: 0.1rem;"></i>
+            <span style="font-size: 0.85rem; color: #9a3412; line-height: 1.5;">
               Las pensiones con completos disponibles iguales o menores a este valor
               aparecerán como <strong>alertas</strong> en el dashboard.
             </span>
@@ -222,7 +222,7 @@ onMounted(cargarConfiguracion);
 
     <!-- Acciones -->
     <div v-if="!cargando" class="acciones">
-      <span v-if="fechaActualizacion" style="color: #94a3b8; font-size: 0.82rem;">
+      <span v-if="fechaActualizacion" style="color: #78716c; font-size: 0.82rem;">
         <i class="pi pi-clock" style="margin-right: 0.3rem;"></i>
         Última actualización: {{ formatearFecha(fechaActualizacion) }}
       </span>
@@ -233,6 +233,13 @@ onMounted(cargarConfiguracion);
         :loading="guardando"
         :disabled="!formularioValido"
         raised
+        style="
+          background: linear-gradient(135deg, #f97316 0%, #ea580c 100%) !important;
+          border: none !important;
+          color: white !important;
+          font-weight: 700;
+          box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35) !important;
+        "
         @click="guardarConfiguracion"
       />
     </div>
@@ -256,9 +263,9 @@ onMounted(cargarConfiguracion);
 .config-card {
   background: white;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #fed7aa;
   padding: 1.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
   display: flex;
   flex-direction: column;
   gap: 1.5rem;

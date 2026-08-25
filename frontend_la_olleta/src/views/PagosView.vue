@@ -382,7 +382,7 @@ onMounted(async () => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
       "
@@ -403,7 +403,7 @@ onMounted(async () => {
       style="
         background: white;
         border-radius: 16px;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #fed7aa;
         padding: 1.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
       "

@@ -158,7 +158,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.25rem 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -176,10 +176,9 @@ onMounted(() => {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
           "
         >
-          💵
+          <i class="pi pi-dollar" style="font-size: 1.4rem; font-weight: 700;"></i>
         </div>
         <div>
           <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
@@ -196,9 +195,9 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.25rem 1.5rem;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
           display: flex;
           align-items: center;
           gap: 1rem;
@@ -206,24 +205,23 @@ onMounted(() => {
       >
         <div
           style="
-            background: #eff6ff;
-            color: #2563eb;
+            background: #fff7ed;
+            color: #ea580c;
             width: 52px;
             height: 52px;
             border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
           "
         >
-          🍽️
+          <i class="pi pi-calendar-clock" style="font-size: 1.4rem;"></i>
         </div>
         <div>
-          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #78716c; text-transform: uppercase;">
             Comidas Servidas Hoy
           </div>
-          <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
+          <div style="font-size: 1.6rem; font-weight: 800; color: #1c1917; margin-top: 0.1rem;">
             {{ cierre.totalComidasServidasHoy }} platos
           </div>
         </div>
@@ -234,7 +232,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.25rem 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -254,10 +252,9 @@ onMounted(() => {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
           "
         >
-          👥
+          <i class="pi pi-users" style="font-size: 1.4rem;"></i>
         </div>
         <div>
           <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
@@ -274,7 +271,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.25rem 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -294,10 +291,9 @@ onMounted(() => {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
           "
         >
-          📦
+          <i class="pi pi-calendar-plus" style="font-size: 1.4rem;"></i>
         </div>
         <div>
           <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
@@ -317,7 +313,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -329,14 +325,14 @@ onMounted(() => {
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <i class="pi pi-wallet" style="color: #059669; font-size: 1.25rem;"></i>
             <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b;">
-              Cierre y Arqueo de Caja del Día
+              Cierre de Caja del Día
             </h2>
           </div>
           <Tag value="Hoy" severity="success" rounded />
         </div>
 
-        <!-- Desglose de ingresos por concepto -->
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+        <!-- Tarjetas de desglose rápido por módulo -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
             <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Cobro Pensiones</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
@@ -370,7 +366,7 @@ onMounted(() => {
           <div
             style="
               background: #f8fafc;
-              border: 1px solid #e2e8f0;
+              border: 1px solid #fed7aa;
               border-radius: 12px;
               padding: 0.85rem 1rem;
               display: flex;
@@ -388,11 +384,10 @@ onMounted(() => {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 1.25rem;
                 flex-shrink: 0;
               "
             >
-              💵
+              <i class="pi pi-dollar" style="font-size: 1.25rem; font-weight: 700;"></i>
             </div>
             <div>
               <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
@@ -407,7 +402,7 @@ onMounted(() => {
           <div
             style="
               background: #f8fafc;
-              border: 1px solid #e2e8f0;
+              border: 1px solid #fed7aa;
               border-radius: 12px;
               padding: 0.85rem 1rem;
               display: flex;
@@ -425,11 +420,10 @@ onMounted(() => {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 1.25rem;
                 flex-shrink: 0;
               "
             >
-              📱
+              <i class="pi pi-qrcode" style="font-size: 1.25rem;"></i>
             </div>
             <div>
               <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
@@ -448,7 +442,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -469,8 +463,9 @@ onMounted(() => {
         <div style="max-height: 220px; overflow-y: auto;">
           <DataTable :value="alertas" class="p-datatable-sm" stripedRows>
             <template #empty>
-              <div style="text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.9rem;">
-                🎉 Todos los pensionados activos cuentan con saldo suficiente.
+              <div style="text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                <i class="pi pi-check-circle" style="color: #10b981; font-size: 1.1rem;"></i>
+                <span>Todos los pensionados activos cuentan con saldo suficiente.</span>
               </div>
             </template>
 
@@ -518,7 +513,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;
@@ -562,7 +557,7 @@ onMounted(() => {
         style="
           background: white;
           border-radius: 16px;
-          border: 1px solid #e2e8f0;
+          border: 1px solid #fed7aa;
           padding: 1.5rem;
           box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
           display: flex;

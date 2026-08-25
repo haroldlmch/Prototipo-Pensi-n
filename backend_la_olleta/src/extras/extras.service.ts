@@ -45,23 +45,26 @@ if (!pension) {
   );
 }
 
-const extra =
-  this.extraRepository.create({
-    fecha:
-      new Date(createExtraDto.fecha),
+    const extra =
+      this.extraRepository.create({
+        fecha:
+          createExtraDto.fecha.slice(0, 10) as any,
 
-    descripcion:
-      createExtraDto.descripcion,
+        descripcion:
+          createExtraDto.descripcion,
 
-    precio:
-      createExtraDto.precio,
+        precio:
+          createExtraDto.precio,
 
-    pension,
-  });
+        estadoPago:
+          createExtraDto.estadoPago || 'PENDIENTE',
 
-return await this.extraRepository.save(
-  extra,
-);
+        pension,
+      });
+
+    return await this.extraRepository.save(
+      extra,
+    );
 
 
 }
@@ -117,9 +120,7 @@ const extra =
   await this.findOne(id);
 
 if (updateExtraDto.fecha) {
-  extra.fecha = new Date(
-    updateExtraDto.fecha,
-  );
+  extra.fecha = updateExtraDto.fecha.slice(0, 10) as any;
 }
 
 if (updateExtraDto.descripcion) {
@@ -131,42 +132,33 @@ if (updateExtraDto.precio !== undefined) {
   extra.precio = updateExtraDto.precio;
 }
 
-if (updateExtraDto.idPension) {
-  const pension =
-    await this.pensionRepository.findOne({
-      where: {
-        id: updateExtraDto.idPension,
-      },
-    });
+    if (updateExtraDto.idPension) {
+      const pension = await this.pensionRepository.findOne({
+        where: {
+          id: updateExtraDto.idPension,
+        },
+      });
 
-  if (!pension) {
-    throw new NotFoundException(
-      'Pensión no encontrada',
-    );
+      if (!pension) {
+        throw new NotFoundException('Pensión no encontrada');
+      }
+
+      extra.pension = pension;
+    }
+
+    if (updateExtraDto.estadoPago) {
+      extra.estadoPago = updateExtraDto.estadoPago;
+    }
+
+    return await this.extraRepository.save(extra);
   }
 
-  extra.pension = pension;
-}
-
-return await this.extraRepository.save(
-  extra,
-);
-
-
-}
-
-async remove(id: number) {
-
-
-await this.findOne(id);
-
-await this.extraRepository.delete(id);
-
-return {
-  mensaje: 'Extra eliminado',
-};
-
-
-}
+  async remove(id: number) {
+    await this.findOne(id);
+    await this.extraRepository.delete(id);
+    return {
+      mensaje: 'Extra eliminado',
+    };
+  }
 }
 

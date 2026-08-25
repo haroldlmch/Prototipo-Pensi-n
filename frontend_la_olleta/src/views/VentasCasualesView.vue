@@ -8,6 +8,8 @@ import DataTable from 'primevue/datatable';
 import Dialog from 'primevue/dialog';
 import InputNumber from 'primevue/inputnumber';
 import Message from 'primevue/message';
+import Select from 'primevue/select';
+import Tag from 'primevue/tag';
 
 import api from '../api/axios';
 
@@ -17,20 +19,30 @@ interface VentaCasual {
   cantidadCompletos: number;
   precioUnitario: number | string;
   montoTotal: number | string;
+  metodoPago?: string;
 }
 
 const ventas = ref<VentaCasual[]>([]);
 const busquedaFecha = ref<Date | null>(null);
+const metodoPago = ref('Efectivo');
+const metodosPago = ['Efectivo', 'Pago QR'];
+
+const obtenerFechaLocal = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 const ventasFiltradas = computed(() => {
   if (!busquedaFecha.value) return ventas.value;
   
-  const fechaSeleccionada = new Date(busquedaFecha.value)
-    .toISOString()
-    .slice(0, 10);
+  const d = new Date(busquedaFecha.value);
+  const fechaSeleccionada = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
   return ventas.value.filter((venta) => {
-    const fechaVenta = new Date(venta.fecha).toISOString().slice(0, 10);
+    const fechaVenta = (venta.fecha || '').slice(0, 10);
     return fechaVenta === fechaSeleccionada;
   });
 });
@@ -77,17 +89,7 @@ const obtenerMensajeError = (error: unknown) => {
   return mensaje ?? 'No se pudo completar la operación.';
 };
 
-const obtenerFechaLocal = () => {
-  const actual = new Date();
-  const desplazamiento = actual.getTimezoneOffset() * 60_000;
-  return new Date(actual.getTime() - desplazamiento).toISOString().slice(0, 10);
-};
-
-const convertirFechaISO = (valor: string) => {
-  // valor es "2026-06-17" del input date
-  // Enviar como ISO string en UTC
-  return valor + 'T00:00:00.000Z';
-};
+const convertirFechaISO = (valor: string) => valor.slice(0, 10);
 
 const precioCasualSugerido = ref<number | null>(null);
 
@@ -118,6 +120,7 @@ const limpiarFormulario = () => {
   cantidadCompletos.value = 1;
   precioUnitario.value = null;
   montoTotal.value = null;
+  metodoPago.value = 'Efectivo';
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
@@ -126,6 +129,7 @@ const nuevaVenta = () => {
   limpiarFormulario();
   if (precioCasualSugerido.value !== null) {
     precioUnitario.value = precioCasualSugerido.value;
+    montoTotal.value = precioCasualSugerido.value * (cantidadCompletos.value ?? 1);
   }
   visible.value = true;
 };
@@ -136,6 +140,7 @@ const editarVenta = (venta: VentaCasual) => {
   cantidadCompletos.value = venta.cantidadCompletos;
   precioUnitario.value = Number(venta.precioUnitario);
   montoTotal.value = Number(venta.montoTotal);
+  metodoPago.value = venta.metodoPago || 'Efectivo';
   modoEdicion.value = true;
   errorMensaje.value = '';
   visible.value = true;
@@ -155,6 +160,7 @@ const guardarVenta = async () => {
     cantidadCompletos: Number(cantidadCompletos.value),
     precioUnitario: Number(precioUnitario.value),
     montoTotal: Number(montoTotal.value),
+    metodoPago: metodoPago.value,
   };
 
   try {
@@ -197,9 +203,11 @@ const eliminarVentaConfirmado = async () => {
 
 const formatearFecha = (valor: string) => {
   if (!valor) return '-';
-  return new Intl.DateTimeFormat('es-BO', { timeZone: 'UTC' }).format(
-    new Date(valor),
-  );
+  const dateOnly = valor.slice(0, 10);
+  const [y, m, d] = dateOnly.split('-');
+  if (!y || !m || !d) return valor;
+  const fechaObj = new Date(Number(y), Number(m) - 1, Number(d));
+  return new Intl.DateTimeFormat('es-BO').format(fechaObj);
 };
 
 const formatearMonto = (monto: number | string) =>
@@ -327,11 +335,27 @@ onMounted(cargarVentas);
           </template>
         </Column>
 
-        <Column header="Monto Total" style="width: 180px; text-align: right;">
+        <Column header="Monto Total" style="width: 170px; text-align: right;">
           <template #body="slotProps">
             <span style="font-weight: 800; color: #059669; font-size: 1rem;">
               {{ formatearMonto(slotProps.data.montoTotal) }}
             </span>
+          </template>
+        </Column>
+
+        <Column header="Método" style="width: 130px; text-align: center;">
+          <template #body="slotProps">
+            <Tag
+              :value="slotProps.data.metodoPago || 'Efectivo'"
+              :severity="
+                (slotProps.data.metodoPago || '').includes('QR')
+                  ? 'info'
+                  : (slotProps.data.metodoPago || '').includes('Transf')
+                  ? 'warn'
+                  : 'success'
+              "
+              rounded
+            />
           </template>
         </Column>
 
@@ -377,13 +401,24 @@ onMounted(cargarVentas);
           {{ errorMensaje }}
         </Message>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
-          <input
-            v-model="fecha"
-            type="date"
-            class="input-fecha-custom"
-          />
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
+            <input
+              v-model="fecha"
+              type="date"
+              class="input-fecha-custom"
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Método de Pago</label>
+            <Select
+              v-model="metodoPago"
+              :options="metodosPago"
+              fluid
+            />
+          </div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
@@ -405,6 +440,7 @@ onMounted(cargarVentas);
               currency="BOB"
               locale="es-BO"
               :min="0"
+              disabled
               fluid
             />
           </div>
@@ -417,6 +453,7 @@ onMounted(cargarVentas);
               currency="BOB"
               locale="es-BO"
               :min="0"
+              disabled
               fluid
             />
           </div>

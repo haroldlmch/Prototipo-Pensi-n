@@ -127,23 +127,11 @@ const editarPension = (pension: any) => {
 const guardarPension = async () => {
   try {
     const payload = {
-      fechaInicio: new Date(
-        fechaInicio.value + 'T00:00:00.000Z'
-      ).toISOString(),
-
-      cantidadCompletos: Number(
-        cantidadCompletos.value,
-      ),
-
-      completosDisponibles: Number(
-        completosDisponibles.value,
-      ),
-
+      fechaInicio: fechaInicio.value.slice(0, 10),
+      cantidadCompletos: Number(cantidadCompletos.value),
+      completosDisponibles: Number(completosDisponibles.value),
       estado: estado.value,
-
-      idPensionado: Number(
-        idPensionado.value,
-      ),
+      idPensionado: Number(idPensionado.value),
     };
 
     let response;
@@ -224,8 +212,11 @@ const getProgresoColor = (disp: number, cant: number) => {
 
 const formatFecha = (fechaStr: string) => {
   if (!fechaStr) return '';
-  const date = new Date(fechaStr);
-  return date.toLocaleDateString('es-ES', { timeZone: 'UTC' });
+  const dateOnly = fechaStr.slice(0, 10);
+  const [y, m, d] = dateOnly.split('-');
+  if (!y || !m || !d) return fechaStr;
+  const date = new Date(Number(y), Number(m) - 1, Number(d));
+  return date.toLocaleDateString('es-ES');
 };
 
 watch(cantidadCompletos, (newVal) => {
@@ -234,6 +225,17 @@ watch(cantidadCompletos, (newVal) => {
   }
 });
 
+const abrirModalPagoDirecto = (pension: any) => {
+  pensionSeleccionadaParaPago.value = pension;
+  idPensionPago.value = pension.id;
+  cantidadCompletosPago.value = pension.cantidadCompletos;
+  fechaPago.value = obtenerFechaLocal();
+  precioUnitario.value = precioPensionadoSugerido.value;
+  montoTotal.value = (precioUnitario.value ?? 0) * (cantidadCompletosPago.value ?? 0);
+  errorMensajePago.value = '';
+  visiblePago.value = true;
+};
+
 // Estado para el diálogo de registro de pago
 const visiblePago = ref(false);
 const guardandoPago = ref(false);
@@ -241,14 +243,17 @@ const errorMensajePago = ref('');
 
 const fechaPago = ref('');
 const precioUnitario = ref<number | null>(null);
+const cantidadCompletosPago = ref<number | null>(null);
 const montoTotal = ref<number | null>(null);
 const idPensionPago = ref<number | null>(null);
 const pensionSeleccionadaParaPago = ref<any>(null);
 
 const obtenerFechaLocal = () => {
-  const fecha = new Date();
-  const desplazamiento = fecha.getTimezoneOffset() * 60_000;
-  return new Date(fecha.getTime() - desplazamiento).toISOString().slice(0, 10);
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 const formularioPagoValido = computed(
@@ -257,6 +262,8 @@ const formularioPagoValido = computed(
     idPensionPago.value !== null &&
     precioUnitario.value !== null &&
     precioUnitario.value >= 0 &&
+    cantidadCompletosPago.value !== null &&
+    cantidadCompletosPago.value >= 1 &&
     montoTotal.value !== null &&
     montoTotal.value >= 0,
 );
@@ -271,10 +278,11 @@ const guardarPago = async () => {
   errorMensajePago.value = '';
 
   const payload = {
-    fechaPago: new Date(fechaPago.value + 'T00:00:00.000Z').toISOString(),
+    fechaPago: fechaPago.value.slice(0, 10),
     precioUnitario: Number(precioUnitario.value),
     montoTotal: Number(montoTotal.value),
     idPension: Number(idPensionPago.value),
+    cantidadCompletos: Number(cantidadCompletosPago.value) || undefined,
   };
 
   try {
@@ -309,12 +317,12 @@ const cargarConfiguracion = async () => {
   }
 };
 
-watch(precioUnitario, (newPrecio) => {
-  if (newPrecio === null || !pensionSeleccionadaParaPago.value) {
+watch([precioUnitario, cantidadCompletosPago], () => {
+  if (precioUnitario.value === null || !cantidadCompletosPago.value) {
     montoTotal.value = null;
     return;
   }
-  montoTotal.value = newPrecio * Number(pensionSeleccionadaParaPago.value.cantidadCompletos);
+  montoTotal.value = Number(precioUnitario.value) * Number(cantidadCompletosPago.value);
 });
 
 onMounted(async () => {
@@ -450,8 +458,18 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 140px; text-align: center;">
+        <Column header="Acciones" style="width: 170px; text-align: center;">
           <template #body="slotProps">
+            <Button
+              icon="pi pi-dollar"
+              severity="success"
+              text
+              rounded
+              title="Registrar Pago / Renovar"
+              style="margin-right: .25rem"
+              @click="abrirModalPagoDirecto(slotProps.data)"
+            />
+
             <Button
               icon="pi pi-pencil"
               severity="warning"
@@ -651,6 +669,17 @@ onMounted(async () => {
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Platos a Recargar</label>
+            <InputNumber
+              v-model="cantidadCompletosPago"
+              :min="1"
+              showButtons
+              placeholder="Ej. 15"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
             <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Precio por Completo</label>
             <InputNumber
               v-model="precioUnitario"
@@ -661,18 +690,18 @@ onMounted(async () => {
               fluid
             />
           </div>
+        </div>
 
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total</label>
-            <InputNumber
-              v-model="montoTotal"
-              mode="currency"
-              currency="BOB"
-              locale="es-BO"
-              :min="0"
-              fluid
-            />
-          </div>
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total a Cobrar</label>
+          <InputNumber
+            v-model="montoTotal"
+            mode="currency"
+            currency="BOB"
+            locale="es-BO"
+            :min="0"
+            fluid
+          />
         </div>
 
         <Button

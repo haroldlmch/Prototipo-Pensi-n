@@ -27,4 +27,9 @@ export class DashboardController {
   alertas() {
     return this.dashboardService.alertas();
   }
+
+  @Get('cierre-caja')
+  cierreCaja() {
+    return this.dashboardService.cierreCaja();
+  }
 }

@@ -17,6 +17,11 @@ export class MenusController {
     return this.menusService.findAll();
   }
 
+  @Get('fecha/:fecha')
+  findByFecha(@Param('fecha') fecha: string) {
+    return this.menusService.findByFecha(fecha);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.menusService.findOne(+id);

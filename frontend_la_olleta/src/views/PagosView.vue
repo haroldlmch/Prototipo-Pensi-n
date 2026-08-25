@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import Button from 'primevue/button';
 import Column from 'primevue/column';
@@ -31,6 +32,8 @@ interface Pago {
   fechaPago: string;
   precioUnitario: number | string;
   montoTotal: number | string;
+  metodoPago?: string;
+  cantidadCompletos?: number;
   pension?: Pension;
 }
 
@@ -41,6 +44,8 @@ interface PensionOption extends Pension {
 const pagos = ref<Pago[]>([]);
 const pensiones = ref<Pension[]>([]);
 const busquedaPensionado = ref('');
+const metodoPago = ref('Efectivo');
+const metodosPago = ['Efectivo', 'Pago QR'];
 
 const pagosFiltrados = computed(() => {
   const busqueda = busquedaPensionado.value.trim().toLowerCase();
@@ -70,22 +75,14 @@ const eliminando = ref(false);
 const pagoId = ref<number | null>(null);
 const fechaPago = ref('');
 const precioUnitario = ref<number | null>(null);
+const cantidadCompletosRecarga = ref<number | null>(null);
 const montoTotal = ref<number | null>(null);
 const idPension = ref<number | null>(null);
 
 const pensionesOpciones = computed<PensionOption[]>(() =>
   pensiones.value
-    .filter((pension) => {
-      // Mostrar si está seleccionada o si tiene completos agotados
-      const tieneCompletosAgotados = pension.completosDisponibles === 0 || pension.estado === 'AGOTADA';
-      return pension.id === idPension.value || tieneCompletosAgotados;
-    })
     .map((pension) => {
-      const pagoExistente = pagos.value.find((pago) => pago.pension?.id === pension.id);
-      const descripcionBase = `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - Pensión #${pension.id}`;
-      const descripcion = pagoExistente 
-        ? `${descripcionBase} (Pago registrado)` 
-        : descripcionBase;
+      const descripcion = `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - Pensión #${pension.id} (Saldo: ${pension.completosDisponibles}/${pension.cantidadCompletos} platos)`;
       return {
         ...pension,
         descripcion,
@@ -103,6 +100,8 @@ const formularioValido = computed(
     idPension.value !== null &&
     precioUnitario.value !== null &&
     precioUnitario.value >= 0 &&
+    cantidadCompletosRecarga.value !== null &&
+    cantidadCompletosRecarga.value >= 1 &&
     montoTotal.value !== null &&
     montoTotal.value >= 0,
 );
@@ -118,13 +117,14 @@ const obtenerMensajeError = (error: unknown) => {
 };
 
 const obtenerFechaLocal = () => {
-  const fecha = new Date();
-  const desplazamiento = fecha.getTimezoneOffset() * 60_000;
-  return new Date(fecha.getTime() - desplazamiento).toISOString().slice(0, 10);
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
-const convertirFechaISO = (valor: string) =>
-  new Date(`${valor}T00:00:00.000Z`).toISOString();
+const convertirFechaISO = (valor: string) => valor.slice(0, 10);
 
 const precioPensionadoSugerido = ref<number | null>(null);
 
@@ -157,8 +157,10 @@ const limpiarFormulario = () => {
   pagoId.value = null;
   fechaPago.value = obtenerFechaLocal();
   precioUnitario.value = null;
+  cantidadCompletosRecarga.value = null;
   montoTotal.value = null;
   idPension.value = null;
+  metodoPago.value = 'Efectivo';
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
@@ -175,8 +177,10 @@ const editarPago = (pago: Pago) => {
   pagoId.value = pago.id;
   fechaPago.value = pago.fechaPago.slice(0, 10);
   precioUnitario.value = Number(pago.precioUnitario);
+  cantidadCompletosRecarga.value = pago.pension?.cantidadCompletos ?? null;
   montoTotal.value = Number(pago.montoTotal);
   idPension.value = pago.pension?.id ?? null;
+  metodoPago.value = pago.metodoPago || 'Efectivo';
   modoEdicion.value = true;
   errorMensaje.value = '';
   visible.value = true;
@@ -196,6 +200,8 @@ const guardarPago = async () => {
     precioUnitario: Number(precioUnitario.value),
     montoTotal: Number(montoTotal.value),
     idPension: Number(idPension.value),
+    metodoPago: metodoPago.value,
+    cantidadCompletos: Number(cantidadCompletosRecarga.value) || undefined,
   };
 
   try {
@@ -225,6 +231,7 @@ const eliminarPagoConfirmado = async () => {
   if (idAEliminar.value === null) return;
   eliminando.value = true;
   errorMensaje.value = '';
+
   try {
     await api.delete(`/pagos/${idAEliminar.value}`);
     mostrarConfirmarEliminar.value = false;
@@ -238,9 +245,11 @@ const eliminarPagoConfirmado = async () => {
 
 const formatearFecha = (fecha: string) => {
   if (!fecha) return '-';
-  return new Intl.DateTimeFormat('es-BO', { timeZone: 'UTC' }).format(
-    new Date(fecha),
-  );
+  const dateOnly = fecha.slice(0, 10);
+  const [y, m, d] = dateOnly.split('-');
+  if (!y || !m || !d) return fecha;
+  const fechaObj = new Date(Number(y), Number(m) - 1, Number(d));
+  return new Intl.DateTimeFormat('es-BO').format(fechaObj);
 };
 
 const formatearMonto = (monto: number | string) =>
@@ -255,19 +264,86 @@ const obtenerNombrePensionado = (pago: Pago) =>
     ?.nombreCompleto ??
   'No disponible';
 
-watch([precioUnitario, idPension], () => {
+const obtenerPlatosPagados = (pago: Pago | any) => {
+  if (!pago) return 0;
+
+  // 1. Si el registro tiene cantidadCompletos explícito
+  const cant = Number(pago.cantidadCompletos);
+  if (!isNaN(cant) && cant > 0) {
+    return cant;
+  }
+
+  // 2. Si tiene montoTotal y precioUnitario, calcular monto / precio
+  const precio = Number(pago.precioUnitario);
+  const monto = Number(pago.montoTotal);
+  if (!isNaN(precio) && !isNaN(monto) && precio > 0 && monto > 0) {
+    return Math.round(monto / precio);
+  }
+
+  // 3. Si la pensión asociada está en el objeto
+  if (pago.pension && pago.pension.cantidadCompletos) {
+    return pago.pension.cantidadCompletos;
+  }
+
+  // 4. Buscar en la lista cargada de pensiones
+  const pId = pago.pension?.id || pago.idPension;
+  if (pId && Array.isArray(pensiones.value)) {
+    const pen = pensiones.value.find((p) => p.id === pId);
+    if (pen && pen.cantidadCompletos) {
+      return pen.cantidadCompletos;
+    }
+  }
+
+  return 0;
+};
+
+const obtenerMetodoPago = (pago: Pago | any) => {
+  return pago?.metodoPago || pago?.metodo_pago || 'Efectivo';
+};
+
+watch(idPension, (newId) => {
+  if (newId && !modoEdicion.value) {
+    const pen = pensiones.value.find((p) => p.id === newId);
+    if (pen && (!cantidadCompletosRecarga.value || cantidadCompletosRecarga.value <= 0)) {
+      cantidadCompletosRecarga.value = pen.cantidadCompletos;
+    }
+  }
+});
+
+watch([precioUnitario, cantidadCompletosRecarga], () => {
   if (modoEdicion.value) return;
 
-  if (precioUnitario.value === null || !pensionSeleccionada.value) {
+  if (precioUnitario.value === null || !cantidadCompletosRecarga.value) {
     montoTotal.value = null;
     return;
   }
 
   montoTotal.value =
-    precioUnitario.value * pensionSeleccionada.value.cantidadCompletos;
+    Number(precioUnitario.value) * Number(cantidadCompletosRecarga.value);
 });
 
-onMounted(cargarDatos);
+const route = useRoute();
+
+const procesarQueryParams = () => {
+  if (route.query.nuevoPago === 'true') {
+    nuevoPago();
+    if (route.query.idPension) {
+      idPension.value = Number(route.query.idPension);
+    }
+  }
+};
+
+watch(
+  () => route.query,
+  () => {
+    procesarQueryParams();
+  },
+);
+
+onMounted(async () => {
+  await cargarDatos();
+  procesarQueryParams();
+});
 </script>
 
 <template>
@@ -357,10 +433,10 @@ onMounted(cargarDatos);
           </template>
         </Column>
 
-        <Column header="Completos Pagados" style="width: 150px; text-align: center;">
+        <Column header="Platos Pagados" style="width: 140px; text-align: center;">
           <template #body="slotProps">
-            <span style="font-weight: 700; color: #3b82f6; font-size: 0.95rem;">
-              {{ slotProps.data.pension?.completosDisponibles ?? '-' }}
+            <span style="font-weight: 700; color: #2563eb;">
+              {{ obtenerPlatosPagados(slotProps.data) }} platos
             </span>
           </template>
         </Column>
@@ -377,10 +453,18 @@ onMounted(cargarDatos);
           </template>
         </Column>
 
-        <Column header="Monto Total Recibido" style="width: 180px; text-align: right;">
+        <Column header="Monto Total Recibido" style="width: 170px; text-align: right;">
           <template #body="slotProps">
             <span style="font-weight: 800; color: #059669; font-size: 1rem;">
               {{ formatearMonto(slotProps.data.montoTotal) }}
+            </span>
+          </template>
+        </Column>
+
+        <Column header="Método" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <span style="font-weight: 600; color: #475569;">
+              {{ obtenerMetodoPago(slotProps.data) }}
             </span>
           </template>
         </Column>
@@ -455,16 +539,41 @@ onMounted(cargarDatos);
           </small>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha de Pago</label>
-          <input
-            v-model="fechaPago"
-            type="date"
-            class="input-fecha-custom"
-          />
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha de Pago</label>
+            <input
+              v-model="fechaPago"
+              type="date"
+              class="input-fecha-custom"
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Método de Pago</label>
+            <Select
+              v-model="metodoPago"
+              :options="metodosPago"
+              fluid
+            />
+          </div>
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Platos a Recargar</label>
+            <InputNumber
+              v-model="cantidadCompletosRecarga"
+              :min="1"
+              showButtons
+              placeholder="Ej. 15"
+              fluid
+            />
+            <small style="color: #64748b; font-size: 0.75rem;">
+              Puede ajustar los platos a recargar.
+            </small>
+          </div>
+
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
             <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Precio por Completo</label>
             <InputNumber
@@ -476,18 +585,18 @@ onMounted(cargarDatos);
               fluid
             />
           </div>
+        </div>
 
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total</label>
-            <InputNumber
-              v-model="montoTotal"
-              mode="currency"
-              currency="BOB"
-              locale="es-BO"
-              :min="0"
-              fluid
-            />
-          </div>
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total a Cobrar</label>
+          <InputNumber
+            v-model="montoTotal"
+            mode="currency"
+            currency="BOB"
+            locale="es-BO"
+            :min="0"
+            fluid
+          />
         </div>
 
         <Button

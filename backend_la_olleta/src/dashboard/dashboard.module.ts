@@ -10,6 +10,8 @@ import { Consumo } from '../consumos/entities/consumo.entity';
 import { Pago } from '../pagos/entities/pago.entity';
 import { VentasCasuale } from '../ventas-casuales/entities/ventas-casuale.entity';
 
+import { Extra } from '../extras/entities/extra.entity';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([
@@ -18,6 +20,7 @@ import { VentasCasuale } from '../ventas-casuales/entities/ventas-casuale.entity
       Consumo,
       Pago,
       VentasCasuale,
+      Extra,
     ]),
   ],
   controllers: [DashboardController],

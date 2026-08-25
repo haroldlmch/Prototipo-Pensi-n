@@ -44,9 +44,7 @@ if (!pensionado) {
 const pension =
   this.pensioneRepository.create({
     fechaInicio:
-      new Date(
-        createPensioneDto.fechaInicio,
-      ),
+      createPensioneDto.fechaInicio.slice(0, 10) as any,
 
     cantidadCompletos:
       createPensioneDto.cantidadCompletos,
@@ -119,9 +117,7 @@ async update(
   updatePensioneDto.fechaInicio
 ) {
   pension.fechaInicio =
-    new Date(
-      updatePensioneDto.fechaInicio,
-    );
+    updatePensioneDto.fechaInicio.slice(0, 10) as any;
 }
 
   if (

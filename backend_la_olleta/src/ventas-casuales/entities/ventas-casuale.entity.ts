@@ -29,6 +29,13 @@ export class VentasCasuale {
   })
   montoTotal!: number;
 
+  @Column('varchar', {
+    name: 'metodo_pago',
+    length: 50,
+    default: 'Efectivo',
+  })
+  metodoPago!: string;
+
   @CreateDateColumn({
     name: 'fecha_creacion',
   })

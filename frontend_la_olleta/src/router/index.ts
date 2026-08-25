@@ -20,72 +20,89 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: '/dashboard',
     },
 
     {
       path: '/login',
       name: 'login',
       component: LoginView,
+      meta: { public: true },
     },
 
     {
       path: '/',
       component: MainLayout,
-
       children: [
         {
           path: 'dashboard',
+          name: 'dashboard',
           component: DashboardView,
         },
-
         {
           path: 'pensionados',
+          name: 'pensionados',
           component: PensionadosView,
         },
-
         {
           path: 'menus',
+          name: 'menus',
           component: MenusView,
         },
-
+        {
+          path: 'opciones-menu',
+          redirect: '/menus',
+        },
         {
           path: 'pensiones',
+          name: 'pensiones',
           component: PensionesView,
         },
-
         {
           path: 'consumos',
+          name: 'consumos',
           component: ConsumosView,
         },
-
         {
           path: 'pagos',
+          name: 'pagos',
           component: PagosView,
         },
-
-        {
-  path: 'opciones-menu',
-  component: OpcionesMenuView,
-},
-
         {
           path: 'extras',
+          name: 'extras',
           component: ExtrasView,
         },
-
         {
           path: 'ventas-casuales',
+          name: 'ventas-casuales',
           component: VentasCasualesView,
         },
-
         {
           path: 'configuracion',
+          name: 'configuracion',
           component: ConfiguracionView,
         },
       ],
     },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/dashboard',
+    },
   ],
+});
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token');
+  const isPublic = to.matched.some((record) => record.meta.public);
+
+  if (!isPublic && !token) {
+    next({ name: 'login' });
+  } else if (to.name === 'login' && token) {
+    next({ name: 'dashboard' });
+  } else {
+    next();
+  }
 });
 
 export default router;

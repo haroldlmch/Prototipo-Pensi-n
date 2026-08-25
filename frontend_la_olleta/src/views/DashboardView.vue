@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import Card from 'primevue/card';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Tag from 'primevue/tag';
+import Calendar from 'primevue/calendar';
+
 import api from '../api/axios';
 
 const router = useRouter();
@@ -15,26 +16,45 @@ const resumen = ref({
   pensionesActivas: 0,
   consumosRegistrados: 0,
   ventasCasuales: 0,
+  totalIngresosHistorico: 0,
+});
+
+const cierre = ref({
+  fecha: new Date().toISOString().slice(0, 10),
+  totalIngresosHoy: 0,
+  totalPagos: 0,
+  totalVentas: 0,
+  totalExtras: 0,
+  totalComidasServidasHoy: 0,
+  totalPlatosPensionados: 0,
+  totalPlatosCasuales: 0,
+  desgloseMetodos: {
+    efectivo: 0,
+    qr: 0,
+  },
 });
 
 const ultimosConsumos = ref<any[]>([]);
 const ultimosPagos = ref<any[]>([]);
 const alertas = ref<any[]>([]);
-
 const cargando = ref(true);
-const hoverKpi = ref<number | null>(null);
+
+const fechaConsultaCierre = ref<Date | null>(new Date());
 
 const cargarDatosDashboard = async () => {
   try {
     cargando.value = true;
-    const [resumenRes, consumosRes, pagosRes, alertasRes] = await Promise.all([
-      api.get('/dashboard/resumen'),
-      api.get('/dashboard/ultimos-consumos'),
-      api.get('/dashboard/ultimos-pagos'),
-      api.get('/dashboard/alertas'),
-    ]);
+    const [resumenRes, cierreRes, consumosRes, pagosRes, alertasRes] =
+      await Promise.all([
+        api.get('/dashboard/resumen'),
+        api.get('/dashboard/cierre-caja'),
+        api.get('/dashboard/ultimos-consumos'),
+        api.get('/dashboard/ultimos-pagos'),
+        api.get('/dashboard/alertas'),
+      ]);
 
     resumen.value = resumenRes.data;
+    cierre.value = cierreRes.data;
     ultimosConsumos.value = consumosRes.data;
     ultimosPagos.value = pagosRes.data;
     alertas.value = alertasRes.data;
@@ -45,24 +65,27 @@ const cargarDatosDashboard = async () => {
   }
 };
 
+const consultarCierreFecha = async () => {
+  if (!fechaConsultaCierre.value) return;
+  const fStr = new Date(fechaConsultaCierre.value).toISOString().slice(0, 10);
+  try {
+    const res = await api.get('/dashboard/cierre-caja');
+    // Si backend soporta parámetro de fecha
+    cierre.value = res.data;
+  } catch (e) {
+    console.error(e);
+  }
+};
+
 const navegar = (ruta: string) => {
   router.push(ruta);
 };
 
-const getTipoConsumoSeverity = (tipo: string) => {
-  switch (tipo?.toUpperCase()) {
-    case 'ALMUERZO':
-      return 'success';
-    case 'DESAYUNO':
-      return 'info';
-    case 'CENA':
-      return 'secondary';
-    case 'COLACION':
-    case 'EXTRA':
-      return 'warn';
-    default:
-      return 'contrast';
-  }
+const irACobro = (pensionId: number) => {
+  router.push({
+    path: '/pagos',
+    query: { nuevoPago: 'true', idPension: String(pensionId) },
+  });
 };
 
 const formatFecha = (fechaStr: string) => {
@@ -71,34 +94,17 @@ const formatFecha = (fechaStr: string) => {
   return fecha.toLocaleDateString('es-ES', {
     day: '2-digit',
     month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
+    timeZone: 'UTC',
   });
 };
 
 const formatDinero = (monto: any) => {
   const num = Number(monto);
   if (isNaN(num)) return '0.00';
-  return num.toLocaleString('es-ES', {
+  return num.toLocaleString('es-BO', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-};
-
-const getConsumosRatio = () => {
-  const consumos = resumen.value.consumosRegistrados || 0;
-  const ventas = resumen.value.ventasCasuales || 0;
-  const total = consumos + ventas;
-  if (total === 0) return 0;
-  return Math.round((consumos / total) * 100);
-};
-
-const getVentasCasualesRatio = () => {
-  const consumos = resumen.value.consumosRegistrados || 0;
-  const ventas = resumen.value.ventasCasuales || 0;
-  const total = consumos + ventas;
-  if (total === 0) return 0;
-  return Math.round((ventas / total) * 100);
 };
 
 onMounted(() => {
@@ -107,517 +113,492 @@ onMounted(() => {
 </script>
 
 <template>
-  <div style="padding: 2rem; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif;">
-    <!-- Encabezado y Acciones Rápidas -->
-    <div
-      style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-      "
-    >
+  <div style="display: flex; flex-direction: column; gap: 1.75rem;">
+    <!-- Encabezado Principal -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
       <div>
         <h1
           style="
             margin: 0;
             font-size: 2.2rem;
             font-weight: 800;
-            background: linear-gradient(135deg, #1e293b 0%, #3b82f6 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: #0f172a;
+            letter-spacing: -0.025em;
           "
         >
-          La O'lleta - Panel de Control
+          Panel de Control y Finanzas
         </h1>
-        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 1rem; font-weight: 500;">
-          Gestión integral de pensionados, consumos y pagos en tiempo real.
+        <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
+          Resumen operativo en tiempo real, balance de caja diario y estado de pensiones.
         </p>
       </div>
 
-      <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+      <div style="display: flex; gap: 0.75rem;">
         <Button
-          label="Consumo"
+          label="Menú de Hoy"
+          icon="pi pi-book"
+          severity="secondary"
+          outlined
+          @click="navegar('/menus')"
+        />
+        <Button
+          label="Registrar Consumo"
           icon="pi pi-check-circle"
           severity="success"
           raised
           @click="navegar('/consumos')"
         />
-        <Button
-          label="Pago"
-          icon="pi pi-wallet"
-          severity="info"
-          raised
-          @click="navegar('/pagos')"
-        />
-        <Button
-          label="Venta Casual"
-          icon="pi pi-shopping-cart"
-          severity="warn"
-          raised
-          @click="navegar('/ventas-casuales')"
-        />
       </div>
     </div>
 
-    <!-- Cargando -->
-    <div
-      v-if="cargando"
-      style="
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 50vh;
-        gap: 1rem;
-      "
-    >
-      <i class="pi pi-spin pi-spinner" style="font-size: 3rem; color: #3b82f6;"></i>
-      <span style="font-weight: 600; color: #64748b;">Cargando información del dashboard...</span>
-    </div>
-
-    <div v-else style="display: flex; flex-direction: column; gap: 2rem;">
-      <!-- KPI Grid -->
+    <!-- TARJETAS KPIS PRINCIPALES -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
+      <!-- KPI 1: Ingresos de Hoy -->
       <div
         style="
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 1.5rem;
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.25rem 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
         "
       >
-        <!-- Card 1: Pensionados -->
         <div
           style="
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
+            background: #ecfdf5;
+            color: #059669;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
+            justify-content: center;
+            font-size: 1.5rem;
           "
-          :style="hoverKpi === 0 ? 'transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08); border-color: #3b82f6;' : ''"
-          @mouseover="hoverKpi = 0"
-          @mouseleave="hoverKpi = null"
-          @click="navegar('/pensionados')"
         >
-          <div>
-            <span style="color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Pensionados Activos</span>
-            <h2 style="margin: 0.25rem 0 0 0; font-size: 2.2rem; font-weight: 800; color: #0f172a;">{{ resumen.pensionadosActivos }}</h2>
-          </div>
-          <div style="background: #dbeafe; color: #1d4ed8; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-            <i class="pi pi-users" style="font-size: 1.5rem;"></i>
-          </div>
+          💵
         </div>
-
-        <!-- Card 2: Pensiones -->
-        <div
-          style="
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-          "
-          :style="hoverKpi === 1 ? 'transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08); border-color: #8b5cf6;' : ''"
-          @mouseover="hoverKpi = 1"
-          @mouseleave="hoverKpi = null"
-          @click="navegar('/pensiones')"
-        >
-          <div>
-            <span style="color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Pensiones Activas</span>
-            <h2 style="margin: 0.25rem 0 0 0; font-size: 2.2rem; font-weight: 800; color: #0f172a;">{{ resumen.pensionesActivas }}</h2>
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            Ingresos de Hoy
           </div>
-          <div style="background: #f3e8ff; color: #6d28d9; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-            <i class="pi pi-calendar" style="font-size: 1.5rem;"></i>
-          </div>
-        </div>
-
-        <!-- Card 3: Consumos -->
-        <div
-          style="
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-          "
-          :style="hoverKpi === 2 ? 'transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08); border-color: #10b981;' : ''"
-          @mouseover="hoverKpi = 2"
-          @mouseleave="hoverKpi = null"
-          @click="navegar('/consumos')"
-        >
-          <div>
-            <span style="color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Consumos Registrados</span>
-            <h2 style="margin: 0.25rem 0 0 0; font-size: 2.2rem; font-weight: 800; color: #0f172a;">{{ resumen.consumosRegistrados }}</h2>
-          </div>
-          <div style="background: #d1fae5; color: #047857; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-            <i class="pi pi-check-circle" style="font-size: 1.5rem;"></i>
-          </div>
-        </div>
-
-        <!-- Card 4: Ventas Casuales -->
-        <div
-          style="
-            background: white;
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e2e8f0;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            cursor: pointer;
-          "
-          :style="hoverKpi === 3 ? 'transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.08); border-color: #f59e0b;' : ''"
-          @mouseover="hoverKpi = 3"
-          @mouseleave="hoverKpi = null"
-          @click="navegar('/ventas-casuales')"
-        >
-          <div>
-            <span style="color: #64748b; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Ventas Casuales</span>
-            <h2 style="margin: 0.25rem 0 0 0; font-size: 2.2rem; font-weight: 800; color: #0f172a;">{{ resumen.ventasCasuales }}</h2>
-          </div>
-          <div style="background: #fef3c7; color: #b45309; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
-            <i class="pi pi-shopping-bag" style="font-size: 1.5rem;"></i>
+          <div style="font-size: 1.6rem; font-weight: 800; color: #059669; margin-top: 0.1rem;">
+            Bs. {{ formatDinero(cierre.totalIngresosHoy) }}
           </div>
         </div>
       </div>
 
-      <!-- Layout Principal: Grilla Principal (70% - 30%) -->
+      <!-- KPI 2: Comidas Servidas Hoy -->
       <div
         style="
-          display: grid;
-          grid-template-columns: 2.2fr 1fr;
-          gap: 2rem;
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.25rem 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
         "
       >
-        <!-- Columna de Contenido (Izquierda) -->
-        <div style="display: flex; flex-direction: column; gap: 2rem;">
-          <!-- Últimos Consumos -->
-          <div
-            style="
-              background: white;
-              border-radius: 16px;
-              border: 1px solid #e2e8f0;
-              padding: 1.5rem;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            "
-          >
-            <h3
-              style="
-                margin-top: 0;
-                margin-bottom: 1.25rem;
-                color: #1e293b;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 1.2rem;
-                font-weight: 700;
-              "
-            >
-              <i class="pi pi-clock" style="color: #3b82f6;"></i>
-              Últimos Consumos Registrados
-            </h3>
+        <div
+          style="
+            background: #eff6ff;
+            color: #2563eb;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+          "
+        >
+          🍽️
+        </div>
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            Comidas Servidas Hoy
+          </div>
+          <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
+            {{ cierre.totalComidasServidasHoy }} platos
+          </div>
+        </div>
+      </div>
 
-            <DataTable
-              :value="ultimosConsumos"
-              stripedRows
-              class="p-datatable-sm"
-              :rows="5"
-              responsiveLayout="scroll"
-            >
-              <Column header="Pensionado">
-                <template #body="slotProps">
-                  <span style="font-weight: 600; color: #334155;">
-                    {{ slotProps.data.pension?.pensionado?.nombreCompleto || 'Consumidor Casual' }}
-                  </span>
-                </template>
-              </Column>
-              
-              <Column field="tipoConsumo" header="Tipo">
-                <template #body="slotProps">
-                  <Tag
-                    :value="slotProps.data.tipoConsumo"
-                    :severity="getTipoConsumoSeverity(slotProps.data.tipoConsumo)"
-                  />
-                </template>
-              </Column>
+      <!-- KPI 3: Pensionados Activos -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.25rem 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          cursor: pointer;
+        "
+        @click="navegar('/pensionados')"
+      >
+        <div
+          style="
+            background: #fdf4ff;
+            color: #c026d3;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+          "
+        >
+          👥
+        </div>
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            Pensionados Activos
+          </div>
+          <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
+            {{ resumen.pensionadosActivos }} clientes
+          </div>
+        </div>
+      </div>
 
-              <Column field="cantidadCompletos" header="Cantidad" style="text-align: center;">
-                <template #body="slotProps">
-                  <strong style="color: #0f172a;">{{ slotProps.data.cantidadCompletos }}</strong>
-                </template>
-              </Column>
+      <!-- KPI 4: Pensiones Activas -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.25rem 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          cursor: pointer;
+        "
+        @click="navegar('/pensiones')"
+      >
+        <div
+          style="
+            background: #fffbeb;
+            color: #d97706;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+          "
+        >
+          📦
+        </div>
+        <div>
+          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            Pensiones en Curso
+          </div>
+          <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
+            {{ resumen.pensionesActivas }} activas
+          </div>
+        </div>
+      </div>
+    </div>
 
-              <Column header="Fecha / Hora">
-                <template #body="slotProps">
-                  <span style="font-size: 0.85rem; color: #64748b;">
-                    {{ formatFecha(slotProps.data.fechaCreacion) }}
-                  </span>
-                </template>
-              </Column>
-            </DataTable>
+    <!-- SECCIÓN: CIERRE DE CAJA DIARIO & ALERTAS -->
+    <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 1.5rem;">
+      <!-- Widget Cierre de Caja -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        "
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="pi pi-wallet" style="color: #059669; font-size: 1.25rem;"></i>
+            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b;">
+              Cierre y Arqueo de Caja del Día
+            </h2>
+          </div>
+          <Tag value="Hoy" severity="success" rounded />
+        </div>
+
+        <!-- Desglose de ingresos por concepto -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem;">
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Cobro Pensiones</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
+              Bs. {{ formatDinero(cierre.totalPagos) }}
+            </div>
           </div>
 
-          <!-- Estadísticas y Distribución -->
-          <div
-            style="
-              background: white;
-              border-radius: 16px;
-              border: 1px solid #e2e8f0;
-              padding: 1.5rem;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-            "
-          >
-            <h3
-              style="
-                margin-top: 0;
-                margin-bottom: 1.5rem;
-                color: #1e293b;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 1.2rem;
-                font-weight: 700;
-              "
-            >
-              <i class="pi pi-chart-bar" style="color: #8b5cf6;"></i>
-              Distribución de Servicios
-            </h3>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Ventas Casuales</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
+              Bs. {{ formatDinero(cierre.totalVentas) }}
+            </div>
+          </div>
 
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2rem;">
-              <!-- Barra de Consumos de Pensionados -->
-              <div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.95rem;">
-                  <span style="font-weight: 600; color: #475569;">Consumos por Suscripción (Pensión)</span>
-                  <span style="font-weight: 700; color: #3b82f6;">{{ getConsumosRatio() }}%</span>
-                </div>
-                <div style="height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden;">
-                  <div
-                    :style="`width: ${getConsumosRatio()}%; height: 100%; background: linear-gradient(90deg, #3b82f6, #60a5fa); border-radius: 6px; transition: width 1s ease;`"
-                  ></div>
-                </div>
-                <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; line-height: 1.4;">
-                  Porcentaje de atenciones dedicadas a clientes regulares con un plan de pensión activo.
-                </p>
-              </div>
-
-              <!-- Barra de Ventas Casuales -->
-              <div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.95rem;">
-                  <span style="font-weight: 600; color: #475569;">Proporción de Ventas Casuales</span>
-                  <span style="font-weight: 700; color: #f59e0b;">{{ getVentasCasualesRatio() }}%</span>
-                </div>
-                <div style="height: 10px; background: #e2e8f0; border-radius: 6px; overflow: hidden;">
-                  <div
-                    :style="`width: ${getVentasCasualesRatio()}%; height: 100%; background: linear-gradient(90deg, #f59e0b, #fbbf24); border-radius: 6px; transition: width 1s ease;`"
-                  ></div>
-                </div>
-                <p style="font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; line-height: 1.4;">
-                  Porcentaje de ingresos / comidas vendidas en el mostrador a clientes casuales diarios.
-                </p>
-              </div>
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Extras Cobrados</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
+              Bs. {{ formatDinero(cierre.totalExtras) }}
             </div>
           </div>
         </div>
 
-        <!-- Columna Lateral (Derecha) -->
-        <div style="display: flex; flex-direction: column; gap: 2rem;">
-          <!-- Panel de Alertas -->
+        <!-- Desglose por método de pago -->
+        <div
+          style="
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+          "
+        >
           <div
             style="
-              background: white;
-              border-radius: 16px;
+              background: #f8fafc;
               border: 1px solid #e2e8f0;
-              padding: 1.5rem;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+              border-radius: 12px;
+              padding: 0.85rem 1rem;
+              display: flex;
+              align-items: center;
+              gap: 0.75rem;
             "
           >
-            <h3
-              style="
-                margin-top: 0;
-                margin-bottom: 1rem;
-                color: #ef4444;
-                display: flex;
-                align-items: center;
-                gap: 0.5rem;
-                font-size: 1.15rem;
-                font-weight: 700;
-              "
-            >
-              <i class="pi pi-exclamation-triangle" style="color: #ef4444;"></i>
-              Pensiones por Agotarse
-            </h3>
-
             <div
-              v-if="alertas.length === 0"
               style="
+                background: #ecfdf5;
+                color: #059669;
+                width: 42px;
+                height: 42px;
+                border-radius: 10px;
                 display: flex;
-                flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                padding: 2.5rem 1rem;
-                color: #94a3b8;
-                text-align: center;
-                gap: 0.5rem;
+                font-size: 1.25rem;
+                flex-shrink: 0;
               "
             >
-              <i class="pi pi-check-circle" style="font-size: 2.2rem; color: #10b981;"></i>
-              <span style="font-size: 0.9rem; font-weight: 500;">¡Todo al día!<br />No hay pensiones con saldo bajo.</span>
+              💵
             </div>
-
-            <div v-else style="display: flex; flex-direction: column; gap: 1rem;">
-              <div style="display: flex; flex-direction: column; gap: 1rem; max-height: 350px; overflow-y: auto; padding-right: 0.25rem;">
-                <div
-                  v-for="alerta in alertas"
-                  :key="alerta.id"
-                  style="
-                    border: 1px solid #fee2e2;
-                    background: #fff5f5;
-                    border-radius: 12px;
-                    padding: 0.85rem;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 0.5rem;
-                    position: relative;
-                  "
-                >
-                  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem;">
-                    <span style="font-weight: 700; color: #991b1b; font-size: 0.9rem; line-height: 1.2;">
-                      {{ alerta.pensionado?.nombreCompleto }}
-                    </span>
-                    <span
-                      style="
-                        font-weight: 800;
-                        color: #dc2626;
-                        font-size: 0.75rem;
-                        background: #fee2e2;
-                        padding: 0.15rem 0.4rem;
-                        border-radius: 6px;
-                        white-space: nowrap;
-                      "
-                    >
-                      {{ alerta.completosDisponibles }} disp.
-                    </span>
-                  </div>
-
-                  <!-- Barra de Progreso Personalizada -->
-                  <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <div style="flex: 1; height: 6px; background: #fee2e2; border-radius: 3px; border: 1px solid #fca5a5; overflow: hidden;">
-                      <div
-                        :style="`width: ${(alerta.completosDisponibles / alerta.cantidadCompletos) * 100}%; height: 100%; background: #dc2626; border-radius: 3px;`"
-                      ></div>
-                    </div>
-                    <span style="font-size: 0.75rem; color: #7f1d1d; font-weight: 600; white-space: nowrap;">
-                      {{ alerta.completosDisponibles }}/{{ alerta.cantidadCompletos }}
-                    </span>
-                  </div>
-                </div>
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+                Efectivo
               </div>
-
-              <Button
-                icon="pi pi-sync"
-                label="Renovar"
-                severity="danger"
-                outlined
-                style="width: 100%; padding: 0.6rem; font-weight: 600;"
-                @click="navegar('/pensiones')"
-              />
+              <div style="font-size: 1.15rem; font-weight: 800; color: #059669; margin-top: 0.1rem;">
+                Bs. {{ formatDinero(cierre.desgloseMetodos.efectivo) }}
+              </div>
             </div>
           </div>
 
-          <!-- Pagos Recientes -->
           <div
             style="
-              background: white;
-              border-radius: 16px;
+              background: #f8fafc;
               border: 1px solid #e2e8f0;
-              padding: 1.5rem;
-              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+              border-radius: 12px;
+              padding: 0.85rem 1rem;
+              display: flex;
+              align-items: center;
+              gap: 0.75rem;
             "
           >
-            <h3
+            <div
               style="
-                margin-top: 0;
-                margin-bottom: 1.25rem;
-                color: #1e293b;
+                background: #eff6ff;
+                color: #2563eb;
+                width: 42px;
+                height: 42px;
+                border-radius: 10px;
                 display: flex;
                 align-items: center;
-                gap: 0.5rem;
-                font-size: 1.15rem;
-                font-weight: 700;
+                justify-content: center;
+                font-size: 1.25rem;
+                flex-shrink: 0;
               "
             >
-              <i class="pi pi-dollar" style="color: #10b981;"></i>
-              Pagos Recientes
-            </h3>
-
-            <div
-              v-if="ultimosPagos.length === 0"
-              style="
-                padding: 2rem 1rem;
-                color: #94a3b8;
-                text-align: center;
-                font-size: 0.9rem;
-              "
-            >
-              No hay pagos registrados recientemente.
+              📱
             </div>
-
-            <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
-              <div
-                v-for="pago in ultimosPagos"
-                :key="pago.id"
-                style="
-                  display: flex;
-                  align-items: center;
-                  justify-content: space-between;
-                  border-bottom: 1px solid #f1f5f9;
-                  padding-bottom: 0.75rem;
-                "
-              >
-                <div style="display: flex; flex-direction: column; gap: 0.1rem; overflow: hidden; width: 65%;">
-                  <span
-                    style="
-                      font-weight: 600;
-                      color: #334155;
-                      font-size: 0.88rem;
-                      white-space: nowrap;
-                      overflow: hidden;
-                      text-overflow: ellipsis;
-                    "
-                  >
-                    {{ pago.pension?.pensionado?.nombreCompleto || 'Pensionado' }}
-                  </span>
-                  <span style="font-size: 0.72rem; color: #94a3b8;">
-                    {{ formatFecha(pago.fechaPago) }}
-                  </span>
-                </div>
-                <div style="font-weight: 750; color: #059669; font-size: 0.95rem; white-space: nowrap;">
-                  Bs. {{ formatDinero(pago.montoTotal) }}
-                </div>
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+                Pago QR
+              </div>
+              <div style="font-size: 1.15rem; font-weight: 800; color: #2563eb; margin-top: 0.1rem;">
+                Bs. {{ formatDinero(cierre.desgloseMetodos.qr) }}
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Widget Alertas de Saldo Bajo -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        "
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="pi pi-exclamation-triangle" style="color: #ea580c; font-size: 1.25rem;"></i>
+            <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b;">
+              Alertas de Saldos Bajos
+            </h2>
+          </div>
+          <Tag :value="`${alertas.length} por renovar`" severity="warn" rounded />
+        </div>
+
+        <div style="max-height: 220px; overflow-y: auto;">
+          <DataTable :value="alertas" class="p-datatable-sm" stripedRows>
+            <template #empty>
+              <div style="text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.9rem;">
+                🎉 Todos los pensionados activos cuentan con saldo suficiente.
+              </div>
+            </template>
+
+            <Column header="Pensionado" style="font-weight: 600; color: #1e293b;">
+              <template #body="slotProps">
+                {{ slotProps.data.pensionado?.nombreCompleto || 'Sin nombre' }}
+              </template>
+            </Column>
+
+            <Column header="Restantes" style="width: 120px; text-align: center;">
+              <template #body="slotProps">
+                <Tag
+                  :value="
+                    slotProps.data.completosDisponibles <= 0
+                      ? '0 (Agotada)'
+                      : `${slotProps.data.completosDisponibles} platos`
+                  "
+                  :severity="slotProps.data.completosDisponibles <= 1 ? 'danger' : 'warn'"
+                  rounded
+                />
+              </template>
+            </Column>
+
+            <Column header="Acción" style="width: 100px; text-align: center;">
+              <template #body="slotProps">
+                <Button
+                  label="Cobro"
+                  icon="pi pi-plus"
+                  size="small"
+                  severity="success"
+                  style="padding: 0.3rem 0.6rem; font-size: 0.75rem; font-weight: 700;"
+                  @click="irACobro(slotProps.data.id)"
+                />
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: ÚLTIMOS MOVIMIENTOS (Consumos y Pagos) -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+      <!-- Últimos Consumos -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        "
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
+            Últimos Consumos Registrados
+          </h2>
+          <Button
+            label="Ver Todos"
+            text
+            size="small"
+            style="font-size: 0.8rem;"
+            @click="navegar('/consumos')"
+          />
+        </div>
+
+        <DataTable :value="ultimosConsumos" class="p-datatable-sm" stripedRows>
+          <template #empty>Sin consumos recientes</template>
+          <Column header="Fecha" style="width: 100px;">
+            <template #body="slotProps">{{ formatFecha(slotProps.data.fecha) }}</template>
+          </Column>
+          <Column header="Pensionado" style="font-weight: 600; color: #334155;">
+            <template #body="slotProps">
+              {{ slotProps.data.pension?.pensionado?.nombreCompleto || 'Sin nombre' }}
+            </template>
+          </Column>
+          <Column header="Plato">
+            <template #body="slotProps">
+              <Tag :value="slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo'" severity="info" />
+            </template>
+          </Column>
+        </DataTable>
+      </div>
+
+      <!-- Últimos Pagos -->
+      <div
+        style="
+          background: white;
+          border-radius: 16px;
+          border: 1px solid #e2e8f0;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        "
+      >
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
+            Últimos Pagos Recibidos
+          </h2>
+          <Button
+            label="Ver Todos"
+            text
+            size="small"
+            style="font-size: 0.8rem;"
+            @click="navegar('/pagos')"
+          />
+        </div>
+
+        <DataTable :value="ultimosPagos" class="p-datatable-sm" stripedRows>
+          <template #empty>Sin pagos recientes</template>
+          <Column header="Fecha" style="width: 100px;">
+            <template #body="slotProps">{{ formatFecha(slotProps.data.fechaPago) }}</template>
+          </Column>
+          <Column header="Pensionado" style="font-weight: 600; color: #334155;">
+            <template #body="slotProps">
+              {{ slotProps.data.pension?.pensionado?.nombreCompleto || 'Sin nombre' }}
+            </template>
+          </Column>
+          <Column header="Monto" style="width: 110px; font-weight: 800; color: #059669; text-align: right;">
+            <template #body="slotProps">
+              Bs. {{ formatDinero(slotProps.data.montoTotal) }}
+            </template>
+          </Column>
+        </DataTable>
       </div>
     </div>
   </div>

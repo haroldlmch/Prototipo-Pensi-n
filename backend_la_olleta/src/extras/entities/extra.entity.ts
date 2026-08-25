@@ -24,6 +24,13 @@ export class Extra {
   })
   precio!: number;
 
+  @Column('varchar', {
+    name: 'estado_pago',
+    length: 30,
+    default: 'PENDIENTE',
+  })
+  estadoPago!: string;
+
   @ManyToOne(
     () => Pensione,
     (pension) => pension.extras,

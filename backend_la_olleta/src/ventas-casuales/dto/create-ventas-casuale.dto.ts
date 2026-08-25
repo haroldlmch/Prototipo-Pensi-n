@@ -1,8 +1,10 @@
 import {
-IsDateString,
-IsInt,
-IsNumber,
-Min,
+  IsDateString,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
 } from 'class-validator';
 
 export class CreateVentasCasualeDto {
@@ -22,6 +24,8 @@ precioUnitario!: number;
 @Min(0)
 montoTotal!: number;
 
+@IsOptional()
+@IsString()
+metodoPago?: string;
+
 }
-
-

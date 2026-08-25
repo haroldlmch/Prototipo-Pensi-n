@@ -1,8 +1,10 @@
 import {
-IsDateString,
-IsInt,
-IsNumber,
-Min,
+  IsDateString,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
 } from 'class-validator';
 
 export class CreatePagoDto {
@@ -21,6 +23,13 @@ montoTotal!: number;
 @IsInt()
 idPension!: number;
 
+@IsOptional()
+@IsString()
+metodoPago?: string;
+
+@IsOptional()
+@IsInt()
+@Min(1)
+cantidadCompletos?: number;
+
 }
-
-

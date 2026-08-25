@@ -19,11 +19,10 @@ const esActiva = (ruta: string) => {
 
 const itemsMenu = [
   { label: 'Dashboard', ruta: '/dashboard', icono: 'pi pi-chart-bar' },
+  { label: 'Menú del Día', ruta: '/menus', icono: 'pi pi-book' },
   { label: 'Pensionados', ruta: '/pensionados', icono: 'pi pi-users' },
-  { label: 'Menús', ruta: '/menus', icono: 'pi pi-book' },
-  { label: 'Opciones Menú', ruta: '/opciones-menu', icono: 'pi pi-list' },
   { label: 'Pensiones', ruta: '/pensiones', icono: 'pi pi-calendar' },
-  { label: 'Consumos', ruta: '/consumos', icono: 'pi pi-check-circle' },
+  { label: 'Consumos (Comedor)', ruta: '/consumos', icono: 'pi pi-check-circle' },
   { label: 'Pagos', ruta: '/pagos', icono: 'pi pi-wallet' },
   { label: 'Extras', ruta: '/extras', icono: 'pi pi-star' },
   { label: 'Ventas Casuales', ruta: '/ventas-casuales', icono: 'pi pi-shopping-cart' },

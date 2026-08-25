@@ -2,6 +2,7 @@ import {
 IsDateString,
 IsInt,
 IsNumber,
+IsOptional,
 IsString,
 MaxLength,
 Min,
@@ -23,6 +24,8 @@ precio!: number;
 @IsInt()
 idPension!: number;
 
+@IsOptional()
+@IsString()
+estadoPago?: string;
+
 }
-
-

@@ -18,12 +18,25 @@ export class Pago {
   })
   precioUnitario!: number;
 
+  @Column('integer', {
+    name: 'cantidad_completos',
+    default: 0,
+  })
+  cantidadCompletos!: number;
+
   @Column('decimal', {
     name: 'monto_total',
     precision: 10,
     scale: 2,
   })
   montoTotal!: number;
+
+  @Column('varchar', {
+    name: 'metodo_pago',
+    length: 50,
+    default: 'Efectivo',
+  })
+  metodoPago!: string;
 
   @ManyToOne(
     () => Pensione,

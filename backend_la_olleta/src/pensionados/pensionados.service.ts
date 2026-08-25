@@ -39,23 +39,40 @@ id: 'DESC',
 });
 }
 
-async findOne(id: number) {
+  async findOne(id: number) {
+    const pensionado = await this.pensionadoRepository.findOne({
+      where: { id },
+      relations: {
+        pensiones: {
+          pagos: true,
+          consumos: {
+            opcionMenu: true,
+          },
+          extras: true,
+        },
+      },
+      order: {
+        pensiones: {
+          id: 'DESC',
+          consumos: {
+            id: 'DESC',
+          },
+          pagos: {
+            id: 'DESC',
+          },
+          extras: {
+            id: 'DESC',
+          },
+        },
+      },
+    });
 
+    if (!pensionado) {
+      throw new NotFoundException('Pensionado no encontrado');
+    }
 
-const pensionado =
-  await this.pensionadoRepository.findOne({
-    where: { id },
-  });
-
-if (!pensionado) {
-  throw new NotFoundException(
-    'Pensionado no encontrado',
-  );
-}
-
-return pensionado;
-
-}
+    return pensionado;
+  }
 
 async update(
 id: number,

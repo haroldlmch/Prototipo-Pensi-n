@@ -9,6 +9,7 @@ import InputNumber from 'primevue/inputnumber';
 import InputText from 'primevue/inputtext';
 import Message from 'primevue/message';
 import Select from 'primevue/select';
+import Tag from 'primevue/tag';
 
 import api from '../api/axios';
 
@@ -27,12 +28,15 @@ interface Extra {
   fecha: string;
   descripcion: string;
   precio: number | string;
+  estadoPago?: string;
   pension?: Pension;
 }
 
 const extras = ref<Extra[]>([]);
 const pensiones = ref<Pension[]>([]);
 const busquedaPensionado = ref('');
+const estadoPago = ref('PENDIENTE');
+const estadosPago = ['PENDIENTE', 'PAGADO'];
 
 const extrasFiltrados = computed(() => {
   if (!busquedaPensionado.value.trim()) return extras.value;
@@ -94,13 +98,14 @@ const obtenerMensajeError = (error: unknown) => {
 };
 
 const obtenerFechaLocal = () => {
-  const actual = new Date();
-  const desplazamiento = actual.getTimezoneOffset() * 60_000;
-  return new Date(actual.getTime() - desplazamiento).toISOString().slice(0, 10);
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
-const convertirFechaISO = (valor: string) =>
-  new Date(`${valor}T00:00:00.000Z`).toISOString();
+const convertirFechaISO = (valor: string) => valor.slice(0, 10);
 
 const cargarDatos = async () => {
   cargando.value = true;
@@ -127,6 +132,7 @@ const limpiarFormulario = () => {
   descripcion.value = '';
   precio.value = null;
   idPension.value = null;
+  estadoPago.value = 'PENDIENTE';
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
@@ -142,9 +148,20 @@ const editarExtra = (extra: Extra) => {
   descripcion.value = extra.descripcion;
   precio.value = Number(extra.precio);
   idPension.value = extra.pension?.id ?? null;
+  estadoPago.value = extra.estadoPago || 'PENDIENTE';
   modoEdicion.value = true;
   errorMensaje.value = '';
   visible.value = true;
+};
+
+const alternarEstadoPago = async (extra: Extra) => {
+  const nuevoEstado = extra.estadoPago === 'PAGADO' ? 'PENDIENTE' : 'PAGADO';
+  try {
+    await api.patch(`/extras/${extra.id}`, { estadoPago: nuevoEstado });
+    extra.estadoPago = nuevoEstado;
+  } catch (error) {
+    console.error(error);
+  }
 };
 
 const guardarExtra = async () => {
@@ -161,6 +178,7 @@ const guardarExtra = async () => {
     descripcion: descripcion.value.trim(),
     precio: Number(precio.value),
     idPension: Number(idPension.value),
+    estadoPago: estadoPago.value,
   };
 
   try {
@@ -204,9 +222,11 @@ const eliminarExtraConfirmado = async () => {
 
 const formatearFecha = (valor: string) => {
   if (!valor) return '-';
-  return new Intl.DateTimeFormat('es-BO', { timeZone: 'UTC' }).format(
-    new Date(valor),
-  );
+  const dateOnly = valor.slice(0, 10);
+  const [y, m, d] = dateOnly.split('-');
+  if (!y || !m || !d) return valor;
+  const fechaObj = new Date(Number(y), Number(m) - 1, Number(d));
+  return new Intl.DateTimeFormat('es-BO').format(fechaObj);
 };
 
 const formatearMonto = (monto: number | string) =>
@@ -323,11 +343,26 @@ onMounted(cargarDatos);
           style="color: #334155; font-weight: 500;"
         />
 
-        <Column header="Precio Adicional" style="width: 160px; text-align: right;">
+        <Column header="Precio" style="width: 130px; text-align: right;">
           <template #body="slotProps">
             <span style="font-weight: 800; color: #b45309;">
               {{ formatearMonto(slotProps.data.precio) }}
             </span>
+          </template>
+        </Column>
+
+        <Column header="Estado de Pago" style="width: 160px; text-align: center;">
+          <template #body="slotProps">
+            <Button
+              :label="slotProps.data.estadoPago || 'PENDIENTE'"
+              :severity="(slotProps.data.estadoPago || '') === 'PAGADO' ? 'success' : 'warn'"
+              :icon="(slotProps.data.estadoPago || '') === 'PAGADO' ? 'pi pi-check' : 'pi pi-clock'"
+              size="small"
+              rounded
+              title="Clic para cambiar estado de pago"
+              style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 700;"
+              @click="alternarEstadoPago(slotProps.data)"
+            />
           </template>
         </Column>
 
@@ -385,13 +420,24 @@ onMounted(cargarDatos);
           />
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
-          <input
-            v-model="fecha"
-            type="date"
-            class="input-fecha-custom"
-          />
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
+            <input
+              v-model="fecha"
+              type="date"
+              class="input-fecha-custom"
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Estado de Pago</label>
+            <Select
+              v-model="estadoPago"
+              :options="estadosPago"
+              fluid
+            />
+          </div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">

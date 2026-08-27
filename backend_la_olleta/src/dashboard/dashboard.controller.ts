@@ -1,12 +1,9 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 
 @Controller('dashboard')
 export class DashboardController {
-
-  constructor(
-    private readonly dashboardService: DashboardService,
-  ) {}
+  constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('resumen')
   resumen() {
@@ -29,7 +26,21 @@ export class DashboardController {
   }
 
   @Get('cierre-caja')
-  cierreCaja() {
-    return this.dashboardService.cierreCaja();
+  cierreCaja(@Query('fecha') fecha?: string) {
+    return this.dashboardService.cierreCaja(fecha);
+  }
+
+  @Get('historial-ganancias')
+  historialGanancias(
+    @Query('dias') dias?: string,
+    @Query('fechaInicio') fechaInicio?: string,
+    @Query('fechaFin') fechaFin?: string,
+  ) {
+    return this.dashboardService.historialGanancias(
+      dias ? parseInt(dias, 10) : 60,
+      fechaInicio,
+      fechaFin,
+    );
   }
 }
+

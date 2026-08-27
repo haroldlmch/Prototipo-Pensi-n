@@ -70,7 +70,7 @@ const login = async () => {
             <path d="m8.86 6.78-.45-1.81a2 2 0 0 1 1.45-2.43l1.94-.48a2 2 0 0 1 2.43 1.45l.45 1.81" />
           </svg>
         </div>
-        <h1 class="brand-title">La O'lleta</h1>
+        <h1 class="brand-title">L'OLLETA</h1>
         <div class="badge-role">Acceso Administrativo</div>
         <p class="brand-subtitle">Control de Pensiones & Restaurante</p>
       </div>

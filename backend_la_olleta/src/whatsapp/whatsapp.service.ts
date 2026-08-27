@@ -36,7 +36,7 @@ export class WhatsappService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    this.logger.log('🚀 Inicializando servicio de WhatsApp (La Olleta)...');
+    this.logger.log('🚀 Inicializando servicio de WhatsApp (L\'OLLETA)...');
     await this.initWhatsApp();
   }
 
@@ -61,7 +61,7 @@ export class WhatsappService implements OnModuleInit {
       this.sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: ['La Olleta App', 'Chrome', '1.0.0'],
+        browser: ['L\'OLLETA App', 'Chrome', '1.0.0'],
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -95,7 +95,7 @@ export class WhatsappService implements OnModuleInit {
         } else if (connection === 'open') {
           this.isConnected = true;
           this.qrCodeString = null;
-          this.logger.log('✅ ¡WhatsApp Conectado con éxito a La Olleta!');
+          this.logger.log('✅ ¡WhatsApp Conectado con éxito a L\'OLLETA!');
         }
       });
 
@@ -174,6 +174,117 @@ export class WhatsappService implements OnModuleInit {
     return `${year}-${month}-${day}`;
   }
 
+  private parsePedido(
+    rawText: string,
+    menuOpciones: OpcionesMenu[],
+  ): {
+    items: { opcionMenu: OpcionesMenu; cantidad: number }[];
+    totalCantidad: number;
+    observacionSopas?: string;
+  } {
+    // 1. Detectar notas de sopa (ej. "2 sopas", "sin sopa", "1 sopa", "3 sopas", "solo segundo")
+    let observacionSopas: string | undefined = undefined;
+    const sopaMatch = rawText.match(/(\d+)\s*sopas?|sin\s*sopas?|solo\s*segundo/i);
+    if (sopaMatch) {
+      observacionSopas = sopaMatch[0].trim();
+    }
+
+    // 2. Limpiar texto y separar por líneas, comas, signos +, o la palabra " y "
+    const cleanText = rawText.replace(/(\d+)\s*sopas?|sin\s*sopas?|solo\s*segundo/gi, ' ');
+    const lineas = cleanText
+      .split(/[\n,+]|\s+y\s+/i)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const itemsMap = new Map<number, { opcionMenu: OpcionesMenu; cantidad: number }>();
+
+    for (const linea of lineas) {
+      let cantidad = 1;
+      let textoPlato = linea;
+
+      // Patrón: "2 chuletas", "2x chuletas", "2 de chuletas"
+      const matchInicio = linea.match(/^(\d+)\s*(?:x|de)?\s*(.*)$/i);
+      // Patrón: "chuleta x2" o "chuleta 2"
+      const matchFin = linea.match(/^(.*?)\s*(?:x|\*|\:)?\s*(\d+)$/i);
+
+      if (matchInicio && matchInicio[1] && matchInicio[2]) {
+        cantidad = parseInt(matchInicio[1], 10);
+        textoPlato = matchInicio[2].trim();
+      } else if (matchFin && matchFin[1] && matchFin[2]) {
+        if (matchFin[1].trim().length > 0 && isNaN(Number(matchFin[1].trim()))) {
+          cantidad = parseInt(matchFin[2], 10);
+          textoPlato = matchFin[1].trim();
+        }
+      }
+
+      if (isNaN(cantidad) || cantidad <= 0) cantidad = 1;
+
+      // Buscar coincidencia en opciones de menú
+      let opcionEncontrada: OpcionesMenu | null = null;
+
+      // A) Coincidencia por número de opción (ej. "1", "opcion 1", "#1", "segundo 1")
+      const numOpcionMatch = textoPlato.match(/^(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
+      if (numOpcionMatch) {
+        const idx = parseInt(numOpcionMatch[1], 10) - 1;
+        if (idx >= 0 && idx < menuOpciones.length) {
+          opcionEncontrada = menuOpciones[idx];
+        }
+      }
+
+      // B) Coincidencia por nombre completo o substring
+      if (!opcionEncontrada) {
+        const lowerTexto = textoPlato.toLowerCase().trim();
+        if (lowerTexto) {
+          opcionEncontrada = menuOpciones.find((op) => {
+            const nomLower = op.nombreSegundo.toLowerCase();
+            return nomLower.includes(lowerTexto) || lowerTexto.includes(nomLower);
+          }) || null;
+        }
+      }
+
+      // C) Búsqueda por palabras clave individuales
+      if (!opcionEncontrada && textoPlato.trim().length > 1) {
+        const palabras = textoPlato.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+        for (const pal of palabras) {
+          const matchPal = menuOpciones.find((op) => op.nombreSegundo.toLowerCase().includes(pal));
+          if (matchPal) {
+            opcionEncontrada = matchPal;
+            break;
+          }
+        }
+      }
+
+      // Si se encontró opción válida, acumular cantidad
+      if (opcionEncontrada) {
+        if (itemsMap.has(opcionEncontrada.id)) {
+          itemsMap.get(opcionEncontrada.id)!.cantidad += cantidad;
+        } else {
+          itemsMap.set(opcionEncontrada.id, {
+            opcionMenu: opcionEncontrada,
+            cantidad,
+          });
+        }
+      }
+    }
+
+    // Fallback: Si no se pudo parsear ninguna opción pero hay opciones en el menú, usar la primera opción
+    if (itemsMap.size === 0 && menuOpciones.length > 0) {
+      itemsMap.set(menuOpciones[0].id, {
+        opcionMenu: menuOpciones[0],
+        cantidad: 1,
+      });
+    }
+
+    const items = Array.from(itemsMap.values());
+    const totalCantidad = items.reduce((sum, item) => sum + item.cantidad, 0);
+
+    return {
+      items,
+      totalCantidad,
+      observacionSopas,
+    };
+  }
+
   private async processOrder(
     remoteJid: string,
     mentionJid: string,
@@ -183,7 +294,7 @@ export class WhatsappService implements OnModuleInit {
   ) {
     if (!pedidoDetalle) {
       await this.sock?.sendMessage(remoteJid, {
-        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1* o *#pedido Pollo al Horno*`,
+        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1 salpicon, 1 chuleta, 2 sopas*`,
         mentions: [mentionJid],
       });
       return;
@@ -218,7 +329,7 @@ export class WhatsappService implements OnModuleInit {
       this.logger.warn(`Número +${rawPhone} (alias: "${pushName}") no encontrado en base de datos de pensionados.`);
       await this.sock?.sendMessage(remoteJid, {
         text: 
-`👋 *LA OLLETA*
+`👋 *L'OLLETA*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ Hola ${pushName ? '*' + pushName + '*' : ''}, tu número no figura registrado en nuestra lista de pensionados activos.
 
@@ -244,7 +355,7 @@ Si deseas adquirir un plan mensual o realizar una venta casual, comunícate con 
       this.logger.warn(`Pensionado ${pensionado.nombreCompleto} no tiene pensión activa con saldo.`);
       await this.sock?.sendMessage(remoteJid, {
         text:
-`⚠️ *LA OLLETA - SIN SALDO*
+`⚠️ *L'OLLETA - SIN SALDO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Hola *${pensionado.nombreCompleto}*, no tienes una pensión activa o se han agotado tus almuerzos disponibles.
 
@@ -276,28 +387,9 @@ Por favor renueva tu plan en administración.
       menu = ultimosMenus[0] || null;
     }
 
-    let opcionSeleccionada: OpcionesMenu | null = null;
+    const opcionesDisponibles = menu?.opcionesMenu || (await this.opcionMenuRepository.find());
 
-    if (menu && menu.opcionesMenu && menu.opcionesMenu.length > 0) {
-      const numOpcion = parseInt(pedidoDetalle, 10);
-      if (!isNaN(numOpcion) && numOpcion >= 1 && numOpcion <= menu.opcionesMenu.length) {
-        opcionSeleccionada = menu.opcionesMenu[numOpcion - 1];
-      } else {
-        // Buscar por coincidencia de texto
-        const detalleLower = pedidoDetalle.toLowerCase();
-        const coincidencia = menu.opcionesMenu.find((op) =>
-          detalleLower.includes(op.nombreSegundo.toLowerCase()) ||
-          op.nombreSegundo.toLowerCase().includes(detalleLower)
-        );
-        opcionSeleccionada = coincidencia || menu.opcionesMenu[0];
-      }
-    } else {
-      // Si no hay ninguna opción en BD, buscar o crear una genérica
-      const opciones = await this.opcionMenuRepository.find();
-      opcionSeleccionada = opciones[0] || null;
-    }
-
-    if (!opcionSeleccionada) {
+    if (!opcionesDisponibles || opcionesDisponibles.length === 0) {
       await this.sock?.sendMessage(remoteJid, {
         text: `⚠️ No se encontró un menú disponible en el sistema. Por favor consulta con administración.`,
         mentions: [mentionJid],
@@ -305,33 +397,80 @@ Por favor renueva tu plan en administración.
       return;
     }
 
-    // 4. Registrar Consumo en la Base de Datos
-    try {
-      await this.consumosService.create({
-        idPension: pension.id,
-        idOpcionMenu: opcionSeleccionada.id,
-        cantidadCompletos: 1,
-        tipoConsumo: 'WHATSAPP',
-        fecha: hoyStr,
+    // 4. Parsear el pedido múltiple (cantidades y platos)
+    const parseResult = this.parsePedido(pedidoDetalle, opcionesDisponibles);
+
+    if (parseResult.items.length === 0 || parseResult.totalCantidad <= 0) {
+      await this.sock?.sendMessage(remoteJid, {
+        text: `⚠️ No se pudo reconocer los platos solicitados. Ejemplo de formato:\n*#pedido 1 salpicon, 1 chuleta, 1 saice*`,
+        mentions: [mentionJid],
       });
+      return;
+    }
 
-      const saldoRestante = pension.completosDisponibles - 1;
+    // 5. Verificar si el saldo de la pensión alcanza para todos los platos pedidos
+    if (pension.completosDisponibles < parseResult.totalCantidad) {
+      this.logger.warn(`Pensionado ${pensionado.nombreCompleto} intentó pedir ${parseResult.totalCantidad} platos pero solo tiene ${pension.completosDisponibles} disponibles.`);
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`⚠️ *L'OLLETA - SALDO INSUFICIENTE*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, solicitaste *${parseResult.totalCantidad} almuerzos*, pero solo tienes *${pension.completosDisponibles} almuerzo(s) disponible(s)* en tu pensión activa.
 
-      this.logger.log(`✅ Consumo registrado para ${pensionado.nombreCompleto} (${opcionSeleccionada.nombreSegundo}). Saldo restante: ${saldoRestante}`);
+Por favor ajusta la cantidad o renueva tu plan en administración.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
 
-      // 5. Enviar mensaje de confirmación por WhatsApp
+    // 6. Registrar Consumos en la Base de Datos
+    try {
+      for (const item of parseResult.items) {
+        await this.consumosService.create({
+          idPension: pension.id,
+          idOpcionMenu: item.opcionMenu.id,
+          cantidadCompletos: item.cantidad,
+          tipoConsumo: 'WHATSAPP',
+          fecha: hoyStr,
+        });
+      }
+
+      // Obtener saldo actualizado
+      const pensionActualizada = await this.pensionRepository.findOne({
+        where: { id: pension.id },
+      });
+      const saldoRestante = pensionActualizada
+        ? pensionActualizada.completosDisponibles
+        : pension.completosDisponibles - parseResult.totalCantidad;
+
+      this.logger.log(`✅ Pedido múltiple (${parseResult.totalCantidad} almuerzos) registrado para ${pensionado.nombreCompleto}. Saldo restante: ${saldoRestante}`);
+
+      // 7. Enviar mensaje de confirmación por WhatsApp
       const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const detallePlatosTexto = parseResult.items
+        .map((it) => `  • ${it.cantidad}x ${it.opcionMenu.nombreSegundo}`)
+        .join('\n');
+
+      const detalleSopaTexto = parseResult.observacionSopas
+        ? parseResult.observacionSopas
+        : (menu?.sopa ? `Sopa ${menu.sopa}` : 'Del día');
+
       const replyMessage =
-`🍽️ *LA OLLETA - PEDIDO CONFIRMADO*
+`🍽️ *L'OLLETA - PEDIDO CONFIRMADO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ *Estado:* Registrado en el sistema
 👤 *Pensionado:* ${pensionado.nombreCompleto}
-🍲 *Sopa:* ${menu?.sopa || 'Del día'}
-🍛 *Segundo:* ${opcionSeleccionada.nombreSegundo}
+
+📋 *Detalle del Pedido (${parseResult.totalCantidad} almuerzo${parseResult.totalCantidad > 1 ? 's' : ''}):*
+${detallePlatosTexto}
+🍲 *Sopa:* ${detalleSopaTexto}
+
+📊 *Almuerzos descontados:* ${parseResult.totalCantidad}
 📊 *Almuerzos restantes:* ${saldoRestante}
 ⏰ *Hora:* ${horaActual}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-_¡Buen provecho! Tu pedido ya está en cocina._`;
+_Tu pedido ha sido reservado._`;
 
       await this.sock?.sendMessage(remoteJid, {
         text: replyMessage,
@@ -339,7 +478,7 @@ _¡Buen provecho! Tu pedido ya está en cocina._`;
       });
 
     } catch (err: any) {
-      this.logger.error('Error al registrar consumo desde WhatsApp:', err);
+      this.logger.error('Error al registrar consumos desde WhatsApp:', err);
       await this.sock?.sendMessage(remoteJid, {
         text: `⚠️ Ocurrió un error al procesar tu pedido: ${err.message || 'Error interno'}`,
         mentions: [mentionJid],

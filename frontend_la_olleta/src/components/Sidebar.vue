@@ -43,6 +43,12 @@ const secciones = [
     ],
   },
   {
+    titulo: 'FINANZAS Y REPORTES',
+    items: [
+      { label: 'Ganancias y Reportes', ruta: '/ganancias', icono: 'pi pi-chart-line' },
+    ],
+  },
+  {
     titulo: 'SISTEMA',
     items: [
       { label: 'Configuración', ruta: '/configuracion', icono: 'pi pi-sliders-h' },
@@ -74,7 +80,7 @@ const secciones = [
         </svg>
       </div>
       <div>
-        <h2 class="brand-title">La O'lleta</h2>
+        <h2 class="brand-title">L'OLLETA</h2>
         <span class="brand-subtitle">Gestión de Pensiones</span>
       </div>
     </div>

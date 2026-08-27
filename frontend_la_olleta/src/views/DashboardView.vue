@@ -19,8 +19,16 @@ const resumen = ref({
   totalIngresosHistorico: 0,
 });
 
+const getFechaLocalStr = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const cierre = ref({
-  fecha: new Date().toISOString().slice(0, 10),
+  fecha: getFechaLocalStr(),
+  gananciaDirectaHoy: 0,
   totalIngresosHoy: 0,
   totalPagos: 0,
   totalVentas: 0,
@@ -38,6 +46,7 @@ const ultimosConsumos = ref<any[]>([]);
 const ultimosPagos = ref<any[]>([]);
 const alertas = ref<any[]>([]);
 const cargando = ref(true);
+const cargandoCierre = ref(false);
 
 const fechaConsultaCierre = ref<Date | null>(new Date());
 
@@ -47,7 +56,7 @@ const cargarDatosDashboard = async () => {
     const [resumenRes, cierreRes, consumosRes, pagosRes, alertasRes] =
       await Promise.all([
         api.get('/dashboard/resumen'),
-        api.get('/dashboard/cierre-caja'),
+        api.get('/dashboard/cierre-caja', { params: { fecha: getFechaLocalStr() } }),
         api.get('/dashboard/ultimos-consumos'),
         api.get('/dashboard/ultimos-pagos'),
         api.get('/dashboard/alertas'),
@@ -67,13 +76,17 @@ const cargarDatosDashboard = async () => {
 
 const consultarCierreFecha = async () => {
   if (!fechaConsultaCierre.value) return;
-  const fStr = new Date(fechaConsultaCierre.value).toISOString().slice(0, 10);
+  const fStr = getFechaLocalStr(new Date(fechaConsultaCierre.value));
   try {
-    const res = await api.get('/dashboard/cierre-caja');
-    // Si backend soporta parámetro de fecha
+    cargandoCierre.value = true;
+    const res = await api.get('/dashboard/cierre-caja', {
+      params: { fecha: fStr },
+    });
     cierre.value = res.data;
   } catch (e) {
-    console.error(e);
+    console.error('Error al consultar cierre por fecha:', e);
+  } finally {
+    cargandoCierre.value = false;
   }
 };
 
@@ -90,11 +103,11 @@ const irACobro = (pensionId: number) => {
 
 const formatFecha = (fechaStr: string) => {
   if (!fechaStr) return '';
-  const fecha = new Date(fechaStr);
-  return fecha.toLocaleDateString('es-ES', {
+  const [year, month, day] = fechaStr.slice(0, 10).split('-');
+  const d = new Date(Number(year), Number(month) - 1, Number(day));
+  return d.toLocaleDateString('es-ES', {
     day: '2-digit',
     month: 'short',
-    timeZone: 'UTC',
   });
 };
 
@@ -105,6 +118,10 @@ const formatDinero = (monto: any) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+};
+
+const esHoy = (fechaStr: string) => {
+  return fechaStr === getFechaLocalStr();
 };
 
 onMounted(() => {
@@ -133,7 +150,22 @@ onMounted(() => {
         </p>
       </div>
 
-      <div style="display: flex; gap: 0.75rem;">
+      <div style="display: flex; gap: 0.75rem; align-items: center;">
+        <Button
+          label="Actualizar"
+          icon="pi pi-refresh"
+          severity="secondary"
+          outlined
+          :loading="cargando"
+          @click="cargarDatosDashboard"
+        />
+        <Button
+          label="Ver Reporte Ganancias"
+          icon="pi pi-chart-line"
+          severity="warn"
+          outlined
+          @click="navegar('/ganancias')"
+        />
         <Button
           label="Menú de Hoy"
           icon="pi pi-book"
@@ -152,8 +184,49 @@ onMounted(() => {
     </div>
 
     <!-- TARJETAS KPIS PRINCIPALES -->
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem;">
-      <!-- KPI 1: Ingresos de Hoy -->
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem;">
+      <!-- KPI 1: Ganancia Directa del Día (Casuales + Extras) -->
+      <div
+        style="
+          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+          border-radius: 16px;
+          border: 1.5px solid #86efac;
+          padding: 1.25rem 1.5rem;
+          box-shadow: 0 4px 10px rgba(22, 163, 74, 0.08);
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        "
+      >
+        <div
+          style="
+            background: #16a34a;
+            color: white;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 8px rgba(22, 163, 74, 0.25);
+          "
+        >
+          <i class="pi pi-bolt" style="font-size: 1.4rem; font-weight: 700;"></i>
+        </div>
+        <div>
+          <div style="font-size: 0.75rem; font-weight: 800; color: #166534; text-transform: uppercase; letter-spacing: 0.05em;">
+            Ganancia Directa Hoy
+          </div>
+          <div style="font-size: 1.6rem; font-weight: 800; color: #14532d; margin-top: 0.1rem;">
+            Bs. {{ formatDinero(cierre.gananciaDirectaHoy) }}
+          </div>
+          <div style="font-size: 0.72rem; color: #15803d; font-weight: 600;">
+            Casuales + Extras del día
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI 2: Total en Caja Hoy (Incluye abonos pensión) -->
       <div
         style="
           background: white;
@@ -178,19 +251,22 @@ onMounted(() => {
             justify-content: center;
           "
         >
-          <i class="pi pi-dollar" style="font-size: 1.4rem; font-weight: 700;"></i>
+          <i class="pi pi-wallet" style="font-size: 1.4rem; font-weight: 700;"></i>
         </div>
         <div>
-          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-            Ingresos de Hoy
+          <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            Total en Caja (Hoy)
           </div>
           <div style="font-size: 1.6rem; font-weight: 800; color: #059669; margin-top: 0.1rem;">
             Bs. {{ formatDinero(cierre.totalIngresosHoy) }}
           </div>
+          <div style="font-size: 0.72rem; color: #64748b;">
+            Efectivo + Pago QR
+          </div>
         </div>
       </div>
 
-      <!-- KPI 2: Comidas Servidas Hoy -->
+      <!-- KPI 3: Comidas Servidas Hoy -->
       <div
         style="
           background: white;
@@ -218,16 +294,19 @@ onMounted(() => {
           <i class="pi pi-calendar-clock" style="font-size: 1.4rem;"></i>
         </div>
         <div>
-          <div style="font-size: 0.8rem; font-weight: 700; color: #78716c; text-transform: uppercase;">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #78716c; text-transform: uppercase;">
             Comidas Servidas Hoy
           </div>
           <div style="font-size: 1.6rem; font-weight: 800; color: #1c1917; margin-top: 0.1rem;">
             {{ cierre.totalComidasServidasHoy }} platos
           </div>
+          <div style="font-size: 0.72rem; color: #78716c;">
+            {{ cierre.totalPlatosPensionados }} pensionados | {{ cierre.totalPlatosCasuales }} casuales
+          </div>
         </div>
       </div>
 
-      <!-- KPI 3: Pensionados Activos -->
+      <!-- KPI 4: Pensionados Activos -->
       <div
         style="
           background: white;
@@ -257,58 +336,22 @@ onMounted(() => {
           <i class="pi pi-users" style="font-size: 1.4rem;"></i>
         </div>
         <div>
-          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+          <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
             Pensionados Activos
           </div>
           <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
             {{ resumen.pensionadosActivos }} clientes
           </div>
-        </div>
-      </div>
-
-      <!-- KPI 4: Pensiones Activas -->
-      <div
-        style="
-          background: white;
-          border-radius: 16px;
-          border: 1px solid #fed7aa;
-          padding: 1.25rem 1.5rem;
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          cursor: pointer;
-        "
-        @click="navegar('/pensiones')"
-      >
-        <div
-          style="
-            background: #fffbeb;
-            color: #d97706;
-            width: 52px;
-            height: 52px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          "
-        >
-          <i class="pi pi-calendar-plus" style="font-size: 1.4rem;"></i>
-        </div>
-        <div>
-          <div style="font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-            Pensiones en Curso
-          </div>
-          <div style="font-size: 1.6rem; font-weight: 800; color: #1e293b; margin-top: 0.1rem;">
-            {{ resumen.pensionesActivas }} activas
+          <div style="font-size: 0.72rem; color: #9333ea;">
+            {{ resumen.pensionesActivas }} planes con saldo
           </div>
         </div>
       </div>
     </div>
 
     <!-- SECCIÓN: CIERRE DE CAJA DIARIO & ALERTAS -->
-    <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 1.5rem;">
-      <!-- Widget Cierre de Caja -->
+    <div style="display: grid; grid-template-columns: 1.35fr 1fr; gap: 1.5rem;">
+      <!-- Widget Cierre de Caja y Ganancia Diaria -->
       <div
         style="
           background: white;
@@ -321,48 +364,85 @@ onMounted(() => {
           gap: 1.25rem;
         "
       >
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <i class="pi pi-wallet" style="color: #059669; font-size: 1.25rem;"></i>
+            <i class="pi pi-chart-pie" style="color: #ea580c; font-size: 1.25rem;"></i>
             <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b;">
-              Cierre de Caja del Día
+              Balance de Caja por Fecha
             </h2>
           </div>
-          <Tag value="Hoy" severity="success" rounded />
+
+          <!-- Selector de Fecha para Consultar Cualquier Día -->
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <Calendar
+              v-model="fechaConsultaCierre"
+              dateFormat="yy-mm-dd"
+              :showIcon="true"
+              style="width: 150px;"
+              @date-select="consultarCierreFecha"
+            />
+            <Tag
+              :value="esHoy(cierre.fecha) ? 'Hoy' : formatFecha(cierre.fecha)"
+              :severity="esHoy(cierre.fecha) ? 'success' : 'info'"
+              rounded
+            />
+          </div>
+        </div>
+
+        <!-- Tarjeta Destacada de Ganancia Directa -->
+        <div
+          style="
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border: 1px solid #fdba74;
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <div>
+            <div style="font-size: 0.8rem; font-weight: 700; color: #9a3412; text-transform: uppercase;">
+              💰 Ganancia Directa (Casuales + Extras)
+            </div>
+            <div style="font-size: 0.82rem; color: #c2410c; margin-top: 0.15rem;">
+              Dinero generado por consumo directo de comida y bebidas
+            </div>
+          </div>
+          <div style="font-size: 1.75rem; font-weight: 900; color: #c2410c;">
+            Bs. {{ formatDinero(cierre.gananciaDirectaHoy) }}
+          </div>
         </div>
 
         <!-- Tarjetas de desglose rápido por módulo -->
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Cobro Pensiones</div>
-            <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
-              Bs. {{ formatDinero(cierre.totalPagos) }}
-            </div>
-          </div>
-
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Ventas Casuales</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">🍛 Ventas Casuales</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
               Bs. {{ formatDinero(cierre.totalVentas) }}
             </div>
+            <div style="font-size: 0.7rem; color: #64748b;">{{ cierre.totalPlatosCasuales }} platos</div>
           </div>
 
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Extras Cobrados</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">🥤 Extras Cobrados</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
               Bs. {{ formatDinero(cierre.totalExtras) }}
             </div>
+            <div style="font-size: 0.7rem; color: #64748b;">Refrescos/postres</div>
+          </div>
+
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">💳 Abonos Pensión</div>
+            <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
+              Bs. {{ formatDinero(cierre.totalPagos) }}
+            </div>
+            <div style="font-size: 0.7rem; color: #64748b;">Suscripciones</div>
           </div>
         </div>
 
         <!-- Desglose por método de pago -->
-        <div
-          style="
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
-          "
-        >
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
           <div
             style="
               background: #f8fafc;
@@ -391,7 +471,7 @@ onMounted(() => {
             </div>
             <div>
               <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-                Efectivo
+                Efectivo Recaudado
               </div>
               <div style="font-size: 1.15rem; font-weight: 800; color: #059669; margin-top: 0.1rem;">
                 Bs. {{ formatDinero(cierre.desgloseMetodos.efectivo) }}
@@ -427,7 +507,7 @@ onMounted(() => {
             </div>
             <div>
               <div style="font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-                Pago QR
+                Pago QR Recaudado
               </div>
               <div style="font-size: 1.15rem; font-weight: 800; color: #2563eb; margin-top: 0.1rem;">
                 Bs. {{ formatDinero(cierre.desgloseMetodos.qr) }}
@@ -460,7 +540,7 @@ onMounted(() => {
           <Tag :value="`${alertas.length} por renovar`" severity="warn" rounded />
         </div>
 
-        <div style="max-height: 220px; overflow-y: auto;">
+        <div style="max-height: 280px; overflow-y: auto;">
           <DataTable :value="alertas" class="p-datatable-sm" stripedRows>
             <template #empty>
               <div style="text-align: center; padding: 1.5rem; color: #94a3b8; font-size: 0.9rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
@@ -549,6 +629,20 @@ onMounted(() => {
               <Tag :value="slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo'" severity="info" />
             </template>
           </Column>
+          <Column header="Modalidad" style="width: 120px;">
+            <template #body="slotProps">
+              <Tag
+                v-if="slotProps.data.tipoConsumo === 'WHATSAPP'"
+                value="WhatsApp"
+                severity="success"
+                icon="pi pi-whatsapp"
+                style="font-size: 0.7rem;"
+              />
+              <span v-else style="font-size: 0.8rem; color: #64748b;">
+                {{ slotProps.data.tipoConsumo }}
+              </span>
+            </template>
+          </Column>
         </DataTable>
       </div>
 
@@ -567,7 +661,7 @@ onMounted(() => {
       >
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <h2 style="margin: 0; font-size: 1.15rem; font-weight: 700; color: #1e293b;">
-            Últimos Pagos Recibidos
+            Últimos Pagos Registrados
           </h2>
           <Button
             label="Ver Todos"
@@ -588,9 +682,19 @@ onMounted(() => {
               {{ slotProps.data.pension?.pensionado?.nombreCompleto || 'Sin nombre' }}
             </template>
           </Column>
-          <Column header="Monto" style="width: 110px; font-weight: 800; color: #059669; text-align: right;">
+          <Column header="Monto">
             <template #body="slotProps">
-              Bs. {{ formatDinero(slotProps.data.montoTotal) }}
+              <span style="font-weight: 700; color: #059669;">
+                Bs. {{ formatDinero(slotProps.data.montoTotal) }}
+              </span>
+            </template>
+          </Column>
+          <Column header="Método" style="width: 100px;">
+            <template #body="slotProps">
+              <Tag
+                :value="slotProps.data.metodoPago || 'Efectivo'"
+                :severity="slotProps.data.metodoPago === 'QR' ? 'info' : 'secondary'"
+              />
             </template>
           </Column>
         </DataTable>

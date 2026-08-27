@@ -98,7 +98,7 @@ onUnmounted(() => {
       <!-- Topbar Ejecutiva -->
       <header class="topbar">
         <div class="topbar-left">
-          <span class="breadcrumb-prefix">La O'lleta /</span>
+          <span class="breadcrumb-prefix">L'OLLETA /</span>
           <h2 class="breadcrumb-title">{{ tituloActual }}</h2>
         </div>
 

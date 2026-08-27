@@ -13,6 +13,7 @@ import ExtrasView from '../views/ExtrasView.vue';
 import VentasCasualesView from '../views/VentasCasualesView.vue';
 import OpcionesMenuView from '@/views/OpcionesMenuView.vue';
 import ConfiguracionView from '../views/ConfiguracionView.vue';
+import GananciasView from '../views/GananciasView.vue';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -77,6 +78,11 @@ const router = createRouter({
           path: 'ventas-casuales',
           name: 'ventas-casuales',
           component: VentasCasualesView,
+        },
+        {
+          path: 'ganancias',
+          name: 'ganancias',
+          component: GananciasView,
         },
         {
           path: 'configuracion',

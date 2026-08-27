@@ -12,7 +12,7 @@ const TARGET_GROUP_ID = ''; // Ejemplo: '120363293340256520@g.us'
 
 async function startWhatsAppBot() {
   console.log('\n====================================================');
-  console.log('🤖 BOT DE PEDIDOS WHATSAPP - LA OLLETA');
+  console.log('🤖 BOT DE PEDIDOS WHATSAPP - L\'OLLETA');
   console.log('====================================================\n');
 
   const { state, saveCreds } = await useMultiFileAuthState('whatsapp_session');
@@ -20,7 +20,7 @@ async function startWhatsAppBot() {
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: 'silent' }),
-    browser: ['La Olleta Bot', 'Chrome', '1.0.0'],
+    browser: ['L\'OLLETA Bot', 'Chrome', '1.0.0'],
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -112,14 +112,14 @@ async function startWhatsAppBot() {
     try {
       // Respuesta de confirmación
       const replyText = 
-`🍽️ *LA OLLETA - PEDIDO CONFIRMADO*
+`🍽️ *L'OLLETA - PEDIDO CONFIRMADO*
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ *Estado:* Registrado en sistema
 👤 *Cliente:* +${cleanPhone}
 📋 *Detalle:* ${pedidoDetalle}
 ⏰ *Hora:* ${new Date().toLocaleTimeString()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
-_¡Buen provecho! Tu orden va en camino a cocina._`;
+_Tu pedido ha sido reservado._`;
 
       await sock.sendMessage(remoteJid, {
         text: replyText,

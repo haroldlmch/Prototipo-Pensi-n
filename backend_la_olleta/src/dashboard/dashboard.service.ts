@@ -135,7 +135,11 @@ export class DashboardService {
       (sum, e) => sum + Number(e.precio || 0),
       0,
     );
-    const totalIngresosHoy = totalPagos + totalVentas + totalExtras;
+
+    // Ganancia directa diaria (Casuales + Extras del día)
+    const gananciaDirectaHoy = totalVentas + totalExtras;
+    // Total recaudado en caja (incluye abonos de pensión)
+    const totalIngresosHoy = gananciaDirectaHoy + totalPagos;
 
     // Desglose por método de pago (Efectivo y QR)
     let efectivo = 0;
@@ -155,6 +159,11 @@ export class DashboardService {
       else efectivo += val;
     });
 
+    extrasHoy.forEach((e) => {
+      // Por defecto los extras se asumen en efectivo si no tienen método especificado
+      efectivo += Number(e.precio || 0);
+    });
+
     const totalPlatosCasuales = ventasHoy.reduce(
       (sum, v) => sum + Number(v.cantidadCompletos || 0),
       0,
@@ -168,6 +177,7 @@ export class DashboardService {
 
     return {
       fecha: fechaFiltroStr,
+      gananciaDirectaHoy,
       totalIngresosHoy,
       totalPagos,
       totalVentas,
@@ -185,6 +195,97 @@ export class DashboardService {
         extras: extrasHoy,
       },
     };
+  }
+
+  async historialGanancias(dias: number = 30, fechaInicio?: string, fechaFin?: string) {
+    const [pagos, ventas, extras, consumos] = await Promise.all([
+      this.pagoRepository.find(),
+      this.ventaRepository.find(),
+      this.extraRepository.find(),
+      this.consumoRepository.find(),
+    ]);
+
+    const mapaDias = new Map<string, {
+      fecha: string;
+      totalVentas: number;
+      cantidadCasuales: number;
+      totalExtras: number;
+      cantidadExtras: number;
+      gananciaDirecta: number;
+      totalPagosPension: number;
+      totalCaja: number;
+      platosPensionados: number;
+      totalPlatosServidos: number;
+    }>();
+
+    const obtenerOCrearDia = (fechaStr: string) => {
+      if (!mapaDias.has(fechaStr)) {
+        mapaDias.set(fechaStr, {
+          fecha: fechaStr,
+          totalVentas: 0,
+          cantidadCasuales: 0,
+          totalExtras: 0,
+          cantidadExtras: 0,
+          gananciaDirecta: 0,
+          totalPagosPension: 0,
+          totalCaja: 0,
+          platosPensionados: 0,
+          totalPlatosServidos: 0,
+        });
+      }
+      return mapaDias.get(fechaStr)!;
+    };
+
+    ventas.forEach((v) => {
+      const f = this.extraerFechaStr(v.fecha);
+      if (f) {
+        const dia = obtenerOCrearDia(f);
+        dia.totalVentas += Number(v.montoTotal || 0);
+        dia.cantidadCasuales += Number(v.cantidadCompletos || 0);
+      }
+    });
+
+    extras.forEach((e) => {
+      if (e.estadoPago === 'PAGADO') {
+        const f = this.extraerFechaStr(e.fecha);
+        if (f) {
+          const dia = obtenerOCrearDia(f);
+          dia.totalExtras += Number(e.precio || 0);
+          dia.cantidadExtras += 1;
+        }
+      }
+    });
+
+    pagos.forEach((p) => {
+      const f = this.extraerFechaStr(p.fechaPago);
+      if (f) {
+        const dia = obtenerOCrearDia(f);
+        dia.totalPagosPension += Number(p.montoTotal || 0);
+      }
+    });
+
+    consumos.forEach((c) => {
+      const f = this.extraerFechaStr(c.fecha);
+      if (f) {
+        const dia = obtenerOCrearDia(f);
+        dia.platosPensionados += Number(c.cantidadCompletos || 0);
+      }
+    });
+
+    // Calcular totales
+    let resultado = Array.from(mapaDias.values()).map((dia) => {
+      dia.gananciaDirecta = dia.totalVentas + dia.totalExtras;
+      dia.totalCaja = dia.gananciaDirecta + dia.totalPagosPension;
+      dia.totalPlatosServidos = dia.cantidadCasuales + dia.platosPensionados;
+      return dia;
+    });
+
+    if (fechaInicio && fechaFin) {
+      resultado = resultado.filter((d) => d.fecha >= fechaInicio && d.fecha <= fechaFin);
+    }
+
+    // Ordenar de más reciente a más antiguo
+    return resultado.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, dias);
   }
 
   async ultimosConsumos() {

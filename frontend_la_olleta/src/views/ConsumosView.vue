@@ -676,7 +676,30 @@ onMounted(() => {
           </template>
         </Column>
 
-        <Column field="tipoConsumo" header="Modalidad" style="width: 180px; color: #64748b;" />
+        <Column field="tipoConsumo" header="Modalidad" style="width: 180px;">
+          <template #body="slotProps">
+            <Tag
+              v-if="slotProps.data.tipoConsumo === 'WHATSAPP'"
+              value="WhatsApp"
+              severity="success"
+              icon="pi pi-whatsapp"
+              style="font-weight: 700; font-size: 0.8rem;"
+            />
+            <Tag
+              v-else-if="slotProps.data.tipoConsumo === 'Almuerzo en Comedor'"
+              value="Comedor"
+              severity="warn"
+              icon="pi pi-home"
+              style="font-weight: 700; font-size: 0.8rem;"
+            />
+            <Tag
+              v-else
+              :value="slotProps.data.tipoConsumo"
+              severity="secondary"
+              style="font-weight: 600; font-size: 0.8rem;"
+            />
+          </template>
+        </Column>
 
         <Column header="Acciones" style="width: 110px; text-align: center;">
           <template #body="slotProps">

@@ -15,12 +15,13 @@ import { ExtrasModule } from './extras/extras.module';
 import { VentasCasualesModule } from './ventas-casuales/ventas-casuales.module';
 import { AuthModule } from './auth/auth.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
-  isGlobal: true,
-}),
+      isGlobal: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -44,6 +45,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     VentasCasualesModule,
     AuthModule,
     DashboardModule,
+    WhatsappModule,
   ],
   controllers: [AppController],
   providers: [AppService],

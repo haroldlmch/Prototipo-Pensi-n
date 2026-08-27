@@ -93,7 +93,12 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token');
+  // Limpiar cualquier token viejo de localStorage para que no persista al cerrar
+  if (localStorage.getItem('token')) {
+    localStorage.removeItem('token');
+  }
+
+  const token = sessionStorage.getItem('token');
   const isPublic = to.matched.some((record) => record.meta.public);
 
   if (!isPublic && !token) {

@@ -10,5 +10,6 @@ import { OpcionesMenu } from 'src/opciones-menu/entities/opciones-menu.entity';
   imports: [TypeOrmModule.forFeature([Consumo, Pensione, OpcionesMenu])],
   controllers: [ConsumosController],
   providers: [ConsumosService],
+  exports: [ConsumosService],
 })
 export class ConsumosModule {}

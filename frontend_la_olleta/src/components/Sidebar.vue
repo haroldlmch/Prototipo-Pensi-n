@@ -9,6 +9,7 @@ const navegar = (ruta: string) => {
 };
 
 const salir = () => {
+  sessionStorage.removeItem('token');
   localStorage.removeItem('token');
   router.push('/login');
 };

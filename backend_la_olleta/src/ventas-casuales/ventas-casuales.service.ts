@@ -17,6 +17,9 @@ export class VentasCasualesService {
     const venta = this.ventasCasualesRepository.create({
       ...createVentasCasualeDto,
       fecha: createVentasCasualeDto.fecha.slice(0, 10) as any,
+      opcionMenu: createVentasCasualeDto.idOpcionMenu
+        ? ({ id: createVentasCasualeDto.idOpcionMenu } as any)
+        : undefined,
     });
 
     return await this.ventasCasualesRepository.save(venta);
@@ -24,6 +27,9 @@ export class VentasCasualesService {
 
   async findAll() {
     return await this.ventasCasualesRepository.find({
+      relations: {
+        opcionMenu: true,
+      },
       order: {
         id: 'DESC',
       },
@@ -33,6 +39,9 @@ export class VentasCasualesService {
   async findOne(id: number) {
     const venta = await this.ventasCasualesRepository.findOne({
       where: { id },
+      relations: {
+        opcionMenu: true,
+      },
     });
 
     if (!venta) {
@@ -63,6 +72,12 @@ export class VentasCasualesService {
 
     if (updateVentasCasualeDto.metodoPago) {
       venta.metodoPago = updateVentasCasualeDto.metodoPago;
+    }
+
+    if (updateVentasCasualeDto.idOpcionMenu !== undefined) {
+      venta.opcionMenu = updateVentasCasualeDto.idOpcionMenu
+        ? ({ id: updateVentasCasualeDto.idOpcionMenu } as any)
+        : undefined;
     }
 
     return await this.ventasCasualesRepository.save(venta);

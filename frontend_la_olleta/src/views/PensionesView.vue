@@ -9,6 +9,7 @@ import InputText from 'primevue/inputtext';
 import Select from 'primevue/select';
 import Tag from 'primevue/tag';
 import InputNumber from 'primevue/inputnumber';
+import Checkbox from 'primevue/checkbox';
 import Message from 'primevue/message';
 
 import api from '../api/axios';
@@ -25,11 +26,7 @@ const pensioneFiltradas = computed(() => {
 });
 
 const pensionadosFiltrados = computed(() => {
-  if (!pensionados.value.length) return [];
-  const idsConPension = pensiones.value
-    .filter((p) => !modoEdicion.value || p.id !== pensionId.value)
-    .map((p) => p.pensionado?.id || p.idPensionado);
-  return pensionados.value.filter((p) => !idsConPension.includes(p.id));
+  return pensionados.value;
 });
 
 const visible = ref(false);
@@ -47,6 +44,54 @@ const cantidadCompletos = ref('');
 const completosDisponibles = ref('');
 const estado = ref('ACTIVA');
 const idPensionado = ref<number | null>(null);
+
+// Lógica de Renovación y Traspaso de Saldo
+const idPensionAnterior = ref<number | null>(null);
+const saldoRestanteAnterior = ref<number>(0);
+const traspasarSaldo = ref<boolean>(true);
+
+const verificarSaldoPensionAnterior = () => {
+  if (modoEdicion.value || !idPensionado.value) {
+    if (!idPensionAnterior.value) {
+      saldoRestanteAnterior.value = 0;
+    }
+    return;
+  }
+
+  // Si ya tenemos una pensión anterior fijada (ej. al pulsar Renovar), buscar esa pensión específica
+  if (idPensionAnterior.value) {
+    const pAnt = pensiones.value.find((p) => Number(p.id) === Number(idPensionAnterior.value));
+    if (pAnt) {
+      saldoRestanteAnterior.value = Number(pAnt.completosDisponibles) || 0;
+      actualizarDisponibles();
+      return;
+    }
+  }
+
+  // Buscar cualquier pensión del pensionado que tenga saldo disponible > 0
+  const pensionConSaldo = pensiones.value.find(
+    (p) =>
+      Number(p.pensionado?.id) === Number(idPensionado.value) &&
+      Number(p.completosDisponibles) > 0,
+  );
+
+  if (pensionConSaldo) {
+    idPensionAnterior.value = pensionConSaldo.id;
+    saldoRestanteAnterior.value = Number(pensionConSaldo.completosDisponibles) || 0;
+    traspasarSaldo.value = true;
+  } else {
+    idPensionAnterior.value = null;
+    saldoRestanteAnterior.value = 0;
+  }
+  actualizarDisponibles();
+};
+
+const actualizarDisponibles = () => {
+  if (modoEdicion.value) return;
+  const comprados = Number(cantidadCompletos.value) || 0;
+  const extra = (traspasarSaldo.value && saldoRestanteAnterior.value > 0) ? Number(saldoRestanteAnterior.value) : 0;
+  completosDisponibles.value = String(comprados + extra);
+};
 
 const cargarPensiones = async () => {
   try {
@@ -88,17 +133,32 @@ const cargarPensionados = async () => {
 const limpiarFormulario = () => {
   pensionId.value = null;
 
-  fechaInicio.value = '';
-  cantidadCompletos.value = '';
-  completosDisponibles.value = '';
+  fechaInicio.value = obtenerFechaLocal();
+  cantidadCompletos.value = '8';
+  completosDisponibles.value = '8';
   estado.value = 'ACTIVA';
   idPensionado.value = null;
+  idPensionAnterior.value = null;
+  saldoRestanteAnterior.value = 0;
+  traspasarSaldo.value = true;
 
   modoEdicion.value = false;
 };
 
 const nuevaPension = () => {
   limpiarFormulario();
+  visible.value = true;
+};
+
+const renovarPension = (pension: any) => {
+  limpiarFormulario();
+  idPensionAnterior.value = Number(pension.id);
+  saldoRestanteAnterior.value = Number(pension.completosDisponibles) || 0;
+  idPensionado.value = Number(pension.pensionado?.id || pension.idPensionado);
+  fechaInicio.value = obtenerFechaLocal();
+  cantidadCompletos.value = '8';
+  traspasarSaldo.value = true;
+  actualizarDisponibles();
   visible.value = true;
 };
 
@@ -120,18 +180,31 @@ const editarPension = (pension: any) => {
   idPensionado.value =
     pension.pensionado?.id;
 
+  idPensionAnterior.value = null;
+  saldoRestanteAnterior.value = 0;
   modoEdicion.value = true;
   visible.value = true;
 };
 
 const guardarPension = async () => {
   try {
+    const comprados = Number(cantidadCompletos.value) || 0;
+    const saldoExtra = (!modoEdicion.value && traspasarSaldo.value && saldoRestanteAnterior.value > 0)
+      ? Number(saldoRestanteAnterior.value)
+      : 0;
+
+    const totalPlatosPaquete = comprados + saldoExtra;
+    const disponiblesCalculados = modoEdicion.value
+      ? Number(completosDisponibles.value)
+      : totalPlatosPaquete;
+
     const payload = {
       fechaInicio: fechaInicio.value.slice(0, 10),
-      cantidadCompletos: Number(cantidadCompletos.value),
-      completosDisponibles: Number(completosDisponibles.value),
+      cantidadCompletos: totalPlatosPaquete,
+      completosDisponibles: disponiblesCalculados,
       estado: estado.value,
       idPensionado: Number(idPensionado.value),
+      idPensionAnterior: (!modoEdicion.value && traspasarSaldo.value && idPensionAnterior.value) ? Number(idPensionAnterior.value) : undefined,
     };
 
     let response;
@@ -159,7 +232,9 @@ const guardarPension = async () => {
       idPensionPago.value = pensionGuardada.id;
       fechaPago.value = obtenerFechaLocal();
       precioUnitario.value = precioPensionadoSugerido.value;
-      montoTotal.value = null;
+      // Cobrar solo los platos que compra hoy (8)
+      cantidadCompletosPago.value = comprados;
+      montoTotal.value = (precioUnitario.value ?? 0) * comprados;
       errorMensajePago.value = '';
       visiblePago.value = true;
     }
@@ -219,11 +294,71 @@ const formatFecha = (fechaStr: string) => {
   return date.toLocaleDateString('es-ES');
 };
 
-watch(cantidadCompletos, (newVal) => {
-  if (!modoEdicion.value) {
-    completosDisponibles.value = newVal;
-  }
+watch(idPensionado, () => {
+  verificarSaldoPensionAnterior();
 });
+
+watch([cantidadCompletos, traspasarSaldo], () => {
+  actualizarDisponibles();
+});
+
+// Modal Recarga Rápida de Platos
+const visibleRecarga = ref(false);
+const pensionRecarga = ref<any>(null);
+const platosAAgregar = ref(8);
+const guardandoRecarga = ref(false);
+const errorMensajeRecarga = ref('');
+
+const abrirModalRecarga = (pension: any) => {
+  pensionRecarga.value = pension;
+  platosAAgregar.value = 8;
+  errorMensajeRecarga.value = '';
+  visibleRecarga.value = true;
+};
+
+const guardarRecargaPlatos = async () => {
+  if (!pensionRecarga.value?.id) return;
+  const cant = Number(platosAAgregar.value);
+  if (!cant || cant <= 0) {
+    errorMensajeRecarga.value = 'Ingrese una cantidad de platos válida';
+    return;
+  }
+
+  guardandoRecarga.value = true;
+  errorMensajeRecarga.value = '';
+
+  try {
+    const p = pensionRecarga.value;
+    const nuevoDisponibles = Number(p.completosDisponibles) + cant;
+    const nuevoTotal = nuevoDisponibles; // El paquete activo queda con 8 platos (1 saldo + 7 nuevos)
+    const hoyStr = obtenerFechaLocal();
+
+    // 1. Actualizar la pensión
+    await api.patch(`/pensiones/${p.id}`, {
+      cantidadCompletos: nuevoTotal,
+      completosDisponibles: nuevoDisponibles,
+      estado: 'ACTIVA',
+      idPensionado: p.pensionado?.id || p.idPensionado,
+    });
+
+    // 2. Registrar el pago de los platos agregados
+    const precio = precioPensionadoSugerido.value || 15;
+    await api.post('/pagos', {
+      idPension: p.id,
+      fechaPago: hoyStr,
+      precioUnitario: precio,
+      montoTotal: cant * precio,
+      cantidadCompletos: cant,
+    });
+
+    visibleRecarga.value = false;
+    await cargarPensiones();
+  } catch (error: any) {
+    errorMensajeRecarga.value = error.response?.data?.message || 'Error al agregar platos a la pensión';
+  } finally {
+    guardandoRecarga.value = false;
+  }
+};
 
 const abrirModalPagoDirecto = (pension: any) => {
   pensionSeleccionadaParaPago.value = pension;
@@ -317,46 +452,21 @@ const cargarConfiguracion = async () => {
   }
 };
 
-watch([precioUnitario, cantidadCompletosPago], () => {
-  if (precioUnitario.value === null || !cantidadCompletosPago.value) {
-    montoTotal.value = null;
-    return;
-  }
-  montoTotal.value = Number(precioUnitario.value) * Number(cantidadCompletosPago.value);
-});
-
 onMounted(async () => {
-  await cargarPensionados();
-  await cargarPensiones();
-  await cargarConfiguracion();
+  await Promise.all([cargarPensiones(), cargarPensionados(), cargarConfiguracion()]);
 });
 </script>
 
 <template>
   <div style="display: flex; flex-direction: column; gap: 1.5rem;">
     <!-- Cabecera -->
-    <div
-      style="
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-      "
-    >
+    <div class="encabezado">
       <div>
-        <h1
-          style="
-            margin: 0;
-            font-size: 2rem;
-            font-weight: 800;
-            color: #0f172a;
-            letter-spacing: -0.025em;
-          "
-        >
-          Pensiones
+        <h1 style="margin: 0; font-size: 2rem; font-weight: 800; color: #0f172a; letter-spacing: -0.025em;">
+          Gestión de Pensiones
         </h1>
         <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
-          Planes y suscripciones de alimentación activos de los clientes.
+          Control de planes de comida, saldos de platos y renovaciones de pensionados.
         </p>
       </div>
 
@@ -383,14 +493,13 @@ onMounted(async () => {
         <i class="pi pi-search" style="color: #94a3b8;"></i>
         <InputText
           v-model="busquedaPensionado"
-          placeholder="Buscar por nombre de pensionado..."
-          style="padding: 0.75rem 1rem; flex: 1;"
-          fluid
+          placeholder="Buscar pensión por nombre del pensionado..."
+          style="flex: 1; border: none; font-size: 0.95rem;"
         />
       </div>
     </div>
 
-    <!-- Contenedor Tabla -->
+    <!-- Tabla de Pensiones -->
     <div
       style="
         background: white;
@@ -405,27 +514,34 @@ onMounted(async () => {
         stripedRows
         paginator
         :rows="10"
+        dataKey="id"
+        emptyMessage="No hay pensiones registradas"
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-
-        <Column
-          header="Pensionado"
-          style="font-weight: 600; color: #334155;"
-        >
+        <Column header="ID" style="width: 70px; color: #64748b; font-weight: 700;">
           <template #body="slotProps">
-            {{ slotProps.data.pensionado?.nombreCompleto }}
+            #{{ slotProps.data.id }}
           </template>
         </Column>
 
         <Column
-          header="Fecha Inicio"
-          style="color: #475569; width: 140px;"
-        >
+          field="pensionado.nombreCompleto"
+          header="Pensionado"
+          style="font-weight: 700; color: #0f172a;"
+        />
+
+        <Column header="Fecha Inicio" style="width: 140px; color: #475569;">
           <template #body="slotProps">
             {{ formatFecha(slotProps.data.fechaInicio) }}
           </template>
         </Column>
+
+        <Column
+          field="cantidadCompletos"
+          header="Total Comprados"
+          style="width: 140px; text-align: center;"
+        />
 
         <Column
           header="Completos Disponibles"
@@ -458,14 +574,34 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 170px; text-align: center;">
+        <Column header="Acciones" style="width: 220px; text-align: center;">
           <template #body="slotProps">
+            <Button
+              icon="pi pi-plus-circle"
+              severity="help"
+              text
+              rounded
+              title="➕ Agregar Platos a esta Pensión (Recarga rápida)"
+              style="margin-right: .25rem"
+              @click="abrirModalRecarga(slotProps.data)"
+            />
+
+            <Button
+              icon="pi pi-refresh"
+              severity="info"
+              text
+              rounded
+              title="🔄 Renovar Pensión (Crear nueva pensión con traspaso de saldo)"
+              style="margin-right: .25rem"
+              @click="renovarPension(slotProps.data)"
+            />
+
             <Button
               icon="pi pi-dollar"
               severity="success"
               text
               rounded
-              title="Registrar Pago / Renovar"
+              title="Registrar Pago"
               style="margin-right: .25rem"
               @click="abrirModalPagoDirecto(slotProps.data)"
             />
@@ -475,6 +611,7 @@ onMounted(async () => {
               severity="warning"
               text
               rounded
+              title="Editar Pensión"
               style="margin-right: .25rem"
               @click="editarPension(slotProps.data)"
             />
@@ -484,6 +621,7 @@ onMounted(async () => {
               severity="danger"
               text
               rounded
+              title="Eliminar Pensión"
               @click="confirmarEliminar(slotProps.data.id)"
             />
           </template>
@@ -498,9 +636,11 @@ onMounted(async () => {
       :header="
         modoEdicion
           ? 'Editar Pensión'
+          : idPensionAnterior
+          ? '🔄 Renovar Pensión / Acumular Saldo'
           : 'Nueva Pensión'
       "
-      :style="{ width: '500px' }"
+      :style="{ width: '520px' }"
     >
       <div
         style="
@@ -510,20 +650,50 @@ onMounted(async () => {
           padding-top: 0.5rem;
         "
       >
+        <!-- Selección de Pensionado -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensionado</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Pensionado *</label>
           <Select
             v-model="idPensionado"
             :options="pensionadosFiltrados"
             optionLabel="nombreCompleto"
             optionValue="id"
             placeholder="Seleccione un pensionado"
+            :disabled="modoEdicion"
             fluid
           />
         </div>
 
+        <!-- Alerta de Saldo Remanente para Traspasar -->
+        <div
+          v-if="!modoEdicion && saldoRestanteAnterior > 0"
+          style="
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: #166534; font-weight: 700; font-size: 0.88rem;">
+            <i class="pi pi-info-circle"></i>
+            <span>Pensión Anterior con Saldo (#{{ idPensionAnterior }})</span>
+          </div>
+          <p style="margin: 0; font-size: 0.82rem; color: #15803d; line-height: 1.4;">
+            El cliente tiene <strong>{{ saldoRestanteAnterior }} almuerzo(s)</strong> restante(s). Se cerrará la pensión anterior y se sumarán a la nueva.
+          </p>
+          <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 0.2rem;">
+            <Checkbox v-model="traspasarSaldo" :binary="true" inputId="checkTraspaso" />
+            <label for="checkTraspaso" style="font-size: 0.85rem; font-weight: 700; color: #14532d; cursor: pointer;">
+              Traspasar y sumar {{ saldoRestanteAnterior }} plato(s) a la nueva pensión
+            </label>
+          </div>
+        </div>
+
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha Inicio</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Fecha Inicio</label>
           <input
             v-model="fechaInicio"
             type="date"
@@ -531,7 +701,7 @@ onMounted(async () => {
               width: 100%;
               padding: 0.75rem 1rem;
               border: 1px solid #cbd5e1;
-              border-radius: 6px;
+              border-radius: 8px;
               font-family: inherit;
               box-sizing: border-box;
             "
@@ -540,27 +710,51 @@ onMounted(async () => {
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Cantidad Completos</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">
+              {{ modoEdicion ? 'Total Comprados' : 'Platos que Compra Hoy *' }}
+            </label>
             <InputText
               v-model="cantidadCompletos"
-              placeholder="Ej. 20"
+              placeholder="Ej. 8"
               style="padding: 0.75rem 1rem;"
             />
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Disponibles</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Total Disponibles</label>
             <InputText
               v-model="completosDisponibles"
-              placeholder="Ej. 20"
-              style="padding: 0.75rem 1rem;"
-              disabled
+              placeholder="Ej. 9"
+              style="padding: 0.75rem 1rem; font-weight: 800; color: #059669; background: #f8fafc;"
+              :disabled="!modoEdicion"
             />
           </div>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Estado</label>
+        <!-- Resumen explicativo -->
+        <div
+          v-if="!modoEdicion"
+          style="
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.82rem;
+          "
+        >
+          <span style="color: #9a3412; font-weight: 600;">
+            Comprados: <strong>{{ cantidadCompletos || 0 }}</strong> + Saldo previo: <strong>{{ (traspasarSaldo && saldoRestanteAnterior > 0) ? saldoRestanteAnterior : 0 }}</strong>
+          </span>
+          <span style="color: #c2410c; font-weight: 800;">
+            = {{ completosDisponibles }} platos en cuenta
+          </span>
+        </div>
+
+        <div v-if="modoEdicion" style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Estado</label>
           <Select
             v-model="estado"
             :options="['ACTIVA', 'AGOTADA']"
@@ -570,9 +764,10 @@ onMounted(async () => {
         </div>
 
         <Button
-          :label="modoEdicion ? 'Guardar' : 'Guardar y pasar al pago'"
+          :label="modoEdicion ? 'Guardar Cambios' : 'Guardar y Registrar Pago'"
           :icon="modoEdicion ? 'pi pi-save' : 'pi pi-credit-card'"
-          style="margin-top: 0.5rem; padding: 0.75rem;"
+          severity="success"
+          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 700;"
           fluid
           @click="guardarPension"
         />
@@ -712,6 +907,101 @@ onMounted(async () => {
           :disabled="!formularioPagoValido"
           fluid
           @click="guardarPago"
+        />
+      </div>
+    </Dialog>
+
+    <!-- Dialogo Recargar Platos a Pensión Existente -->
+    <Dialog
+      v-model:visible="visibleRecarga"
+      modal
+      :header="`➕ Agregar Platos a la Pensión #${pensionRecarga?.id || ''}`"
+      :style="{ width: '480px' }"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
+        <Message v-if="errorMensajeRecarga" severity="error" :closable="false">
+          {{ errorMensajeRecarga }}
+        </Message>
+
+        <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+          <span style="font-size: 0.85rem; font-weight: 700; color: #475569;">Pensionado</span>
+          <div style="font-size: 1.15rem; font-weight: 800; color: #0f172a;">
+            {{ pensionRecarga?.pensionado?.nombreCompleto || 'Pensionado' }}
+          </div>
+        </div>
+
+        <div
+          style="
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <div>
+            <div style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Saldo Actual Restante</div>
+            <div style="font-size: 1.3rem; font-weight: 800; color: #0284c7;">
+              {{ pensionRecarga?.completosDisponibles || 0 }} platos
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.8rem; color: #64748b; font-weight: 600;">Total Comprados Histórico</div>
+            <div style="font-size: 1.1rem; font-weight: 700; color: #475569;">
+              {{ pensionRecarga?.cantidadCompletos || 0 }} platos
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">¿Cuántos platos desea agregar hoy? *</label>
+          <InputNumber
+            v-model="platosAAgregar"
+            :min="1"
+            :max="100"
+            showButtons
+            fluid
+          />
+        </div>
+
+        <!-- Resumen de Nuevo Saldo -->
+        <div
+          style="
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1.5px solid #86efac;
+            border-radius: 12px;
+            padding: 0.85rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <div>
+            <div style="font-size: 0.82rem; color: #166534; font-weight: 700; text-transform: uppercase;">
+              Nuevo Saldo: {{ (Number(pensionRecarga?.completosDisponibles || 0) + Number(platosAAgregar || 0)) }} platos
+            </div>
+            <div style="font-size: 0.75rem; color: #15803d; margin-top: 0.1rem;">
+              {{ platosAAgregar }} platos x Bs. {{ Number(precioPensionadoSugerido || 15).toFixed(2) }}
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">Total a Cobrar:</div>
+            <div style="font-size: 1.4rem; font-weight: 900; color: #14532d;">
+              Bs. {{ (Number(platosAAgregar || 0) * Number(precioPensionadoSugerido || 15)).toFixed(2) }}
+            </div>
+          </div>
+        </div>
+
+        <Button
+          :label="`Guardar y Cobrar (Bs. ${(Number(platosAAgregar || 0) * Number(precioPensionadoSugerido || 15)).toFixed(2)})`"
+          icon="pi pi-check"
+          severity="success"
+          :loading="guardandoRecarga"
+          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 700;"
+          fluid
+          @click="guardarRecargaPlatos"
         />
       </div>
     </Dialog>

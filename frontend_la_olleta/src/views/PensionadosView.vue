@@ -6,6 +6,7 @@ import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
+import InputNumber from 'primevue/inputnumber';
 import Checkbox from 'primevue/checkbox';
 import Tag from 'primevue/tag';
 import ProgressBar from 'primevue/progressbar';
@@ -282,8 +283,100 @@ const obtenerMetodoPago = (pago: any) => {
   return pago?.metodoPago || pago?.metodo_pago || 'Efectivo';
 };
 
+// Modal Renovación de Pensión desde Ficha 360
+const visibleRenovacion = ref(false);
+const cantidadCompletosRenovacion = ref(8);
+const traspasarSaldoFicha = ref(true);
+const guardandoRenovacion = ref(false);
+const errorMensajeRenovacion = ref('');
+const precioPensionadoSugerido = ref(15);
+
+const saldoAnteriorFicha = computed(() => {
+  return pensioneActivaFicha.value?.completosDisponibles || 0;
+});
+
+const totalDisponiblesRenovacion = computed(() => {
+  const comprados = Number(cantidadCompletosRenovacion.value) || 0;
+  const extra = traspasarSaldoFicha.value ? saldoAnteriorFicha.value : 0;
+  return comprados + extra;
+});
+
+const montoTotalRenovacion = computed(() => {
+  return (Number(cantidadCompletosRenovacion.value) || 0) * (precioPensionadoSugerido.value || 15);
+});
+
+const abrirRenovacionFicha = () => {
+  cantidadCompletosRenovacion.value = 8;
+  traspasarSaldoFicha.value = true;
+  errorMensajeRenovacion.value = '';
+  visibleRenovacion.value = true;
+};
+
+const guardarRenovacionFicha = async () => {
+  if (!pensionadoFicha.value?.id) return;
+  if (!cantidadCompletosRenovacion.value || cantidadCompletosRenovacion.value <= 0) {
+    errorMensajeRenovacion.value = 'Indique una cantidad válida de platos.';
+    return;
+  }
+
+  guardandoRenovacion.value = true;
+  errorMensajeRenovacion.value = '';
+
+  try {
+    const d = new Date();
+    const hoyStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const comprados = Number(cantidadCompletosRenovacion.value);
+    const saldoExtra = (traspasarSaldoFicha.value && saldoAnteriorFicha.value > 0) ? Number(saldoAnteriorFicha.value) : 0;
+    const totalPaquete = comprados + saldoExtra;
+
+    const payloadPension = {
+      idPensionado: pensionadoFicha.value.id,
+      fechaInicio: hoyStr,
+      cantidadCompletos: totalPaquete,
+      completosDisponibles: totalPaquete,
+      estado: 'ACTIVA',
+      idPensionAnterior: (traspasarSaldoFicha.value && pensioneActivaFicha.value?.id) ? pensioneActivaFicha.value.id : undefined,
+    };
+
+    const resPension = await api.post('/pensiones', payloadPension);
+    const nuevaPension = resPension.data;
+
+    const payloadPago = {
+      idPension: nuevaPension.id,
+      fechaPago: hoyStr,
+      precioUnitario: Number(precioPensionadoSugerido.value),
+      montoTotal: Number(montoTotalRenovacion.value),
+      cantidadCompletos: comprados,
+    };
+
+    await api.post('/pagos', payloadPago);
+
+    visibleRenovacion.value = false;
+    await verFicha360(pensionadoFicha.value);
+    await cargarPensionados();
+  } catch (error: any) {
+    errorMensajeRenovacion.value = error.response?.data?.message || 'Error al renovar pensión.';
+  } finally {
+    guardandoRenovacion.value = false;
+  }
+};
+
+const cargarConfiguracion = async () => {
+  try {
+    const response = await api.get('/configuracion');
+    const config = Array.isArray(response.data) ? response.data[0] : response.data;
+    if (config) {
+      precioPensionadoSugerido.value = Number(config.precioPensionado);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 onMounted(() => {
   cargarPensionados();
+  cargarConfiguracion();
 });
 </script>
 
@@ -486,12 +579,23 @@ onMounted(() => {
                 {{ pensioneActivaFicha.completosDisponibles }} platos disponibles de {{ pensioneActivaFicha.cantidadCompletos }}
               </div>
             </div>
-            <Tag
-              :value="pensioneActivaFicha.estado"
-              :severity="pensioneActivaFicha.estado === 'ACTIVA' ? 'success' : 'warn'"
-              rounded
-              style="font-size: 0.85rem; padding: 0.35rem 0.75rem;"
-            />
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <Tag
+                :value="pensioneActivaFicha.estado"
+                :severity="pensioneActivaFicha.estado === 'ACTIVA' ? 'success' : 'warn'"
+                rounded
+                style="font-size: 0.85rem; padding: 0.35rem 0.75rem;"
+              />
+              <Button
+                label="Renovar"
+                icon="pi pi-refresh"
+                severity="info"
+                size="small"
+                outlined
+                title="Renovar pensión y acumular platos restantes"
+                @click="abrirRenovacionFicha"
+              />
+            </div>
           </div>
 
           <!-- Barra de Progreso de Consumo -->
@@ -510,13 +614,25 @@ onMounted(() => {
             background: #fffbeb;
             border: 1px solid #fef3c7;
             border-radius: 12px;
-            padding: 1rem;
+            padding: 1rem 1.25rem;
             color: #b45309;
             font-size: 0.9rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
           "
         >
-          <i class="pi pi-info-circle" style="margin-right: 0.4rem;"></i>
-          Este pensionado no tiene ninguna pensión activa actualmente.
+          <div>
+            <i class="pi pi-info-circle" style="margin-right: 0.4rem;"></i>
+            Este pensionado no tiene ninguna pensión activa actualmente.
+          </div>
+          <Button
+            label="Crear / Renovar Pensión"
+            icon="pi pi-plus"
+            severity="success"
+            size="small"
+            @click="abrirRenovacionFicha"
+          />
         </div>
 
         <!-- Tarjetas de Métricas Rápidas -->
@@ -716,6 +832,117 @@ onMounted(() => {
             @click="eliminarPensionadoConfirmado"
           />
         </div>
+      </div>
+    </Dialog>
+
+    <!-- Dialogo Renovar Pensión desde Ficha 360 -->
+    <Dialog
+      v-model:visible="visibleRenovacion"
+      modal
+      :header="`🔄 Renovar Pensión - ${pensionadoFicha?.nombreCompleto || 'Pensionado'}`"
+      :style="{ width: '520px' }"
+    >
+      <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
+        <Message v-if="errorMensajeRenovacion" severity="error" :closable="false">
+          {{ errorMensajeRenovacion }}
+        </Message>
+
+        <!-- Alerta de Saldo Remanente -->
+        <div
+          v-if="saldoAnteriorFicha > 0"
+          style="
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-radius: 12px;
+            padding: 0.85rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: #166534; font-weight: 700; font-size: 0.88rem;">
+            <i class="pi pi-info-circle"></i>
+            <span>Pensión Anterior con Saldo Restante (#{{ pensioneActivaFicha?.id }})</span>
+          </div>
+          <p style="margin: 0; font-size: 0.82rem; color: #15803d; line-height: 1.4;">
+            El cliente tiene <strong>{{ saldoAnteriorFicha }} almuerzo(s)</strong> restante(s). Se cerrará la pensión anterior y se sumarán a la nueva.
+          </p>
+          <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 0.2rem;">
+            <Checkbox v-model="traspasarSaldoFicha" :binary="true" inputId="checkTraspasoFicha" />
+            <label for="checkTraspasoFicha" style="font-size: 0.85rem; font-weight: 700; color: #14532d; cursor: pointer;">
+              Traspasar y sumar {{ saldoAnteriorFicha }} plato(s) a la nueva pensión
+            </label>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Platos que Compra Hoy *</label>
+            <InputNumber
+              v-model="cantidadCompletosRenovacion"
+              :min="1"
+              :max="100"
+              showButtons
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Total Disponibles</label>
+            <div
+              style="
+                padding: 0.75rem 1rem;
+                background: #f8fafc;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                font-weight: 800;
+                font-size: 1.1rem;
+                color: #059669;
+                text-align: center;
+              "
+            >
+              {{ totalDisponiblesRenovacion }} platos
+            </div>
+          </div>
+        </div>
+
+        <!-- Resumen de Cobro y Saldo -->
+        <div
+          style="
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border: 1.5px solid #86efac;
+            border-radius: 12px;
+            padding: 0.85rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <div>
+            <div style="font-size: 0.82rem; color: #166534; font-weight: 700; text-transform: uppercase;">
+              {{ cantidadCompletosRenovacion }} platos x Bs. {{ precioPensionadoSugerido.toFixed(2) }}
+            </div>
+            <div style="font-size: 0.75rem; color: #15803d; margin-top: 0.1rem;">
+              Saldo acreditado en cuenta: <strong>{{ totalDisponiblesRenovacion }} platos</strong>
+            </div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">Total a Cobrar:</div>
+            <div style="font-size: 1.4rem; font-weight: 900; color: #14532d;">
+              Bs. {{ montoTotalRenovacion.toFixed(2) }}
+            </div>
+          </div>
+        </div>
+
+        <Button
+          :label="`Confirmar Renovación (Cobrar Bs. ${montoTotalRenovacion.toFixed(2)})`"
+          icon="pi pi-check"
+          severity="success"
+          :loading="guardandoRenovacion"
+          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 700;"
+          fluid
+          @click="guardarRenovacionFicha"
+        />
       </div>
     </Dialog>
   </div>

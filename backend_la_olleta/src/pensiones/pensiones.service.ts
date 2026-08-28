@@ -23,47 +23,38 @@ private readonly pensionadoRepository: Repository<Pensionado>,
 
 ) {}
 
-async create(
-createPensioneDto: CreatePensioneDto,
-) {
+  async create(createPensioneDto: CreatePensioneDto) {
+    const pensionado = await this.pensionadoRepository.findOne({
+      where: {
+        id: createPensioneDto.idPensionado,
+      },
+    });
 
+    if (!pensionado) {
+      throw new NotFoundException('Pensionado no encontrado');
+    }
 
-const pensionado =
-  await this.pensionadoRepository.findOne({
-    where: {
-      id: createPensioneDto.idPensionado,
-    },
-  });
+    if (createPensioneDto.idPensionAnterior) {
+      const pensionAnterior = await this.pensioneRepository.findOne({
+        where: { id: createPensioneDto.idPensionAnterior },
+      });
+      if (pensionAnterior) {
+        pensionAnterior.estado = 'AGOTADA';
+        pensionAnterior.completosDisponibles = 0;
+        await this.pensioneRepository.save(pensionAnterior);
+      }
+    }
 
-if (!pensionado) {
-  throw new NotFoundException(
-    'Pensionado no encontrado',
-  );
-}
+    const pension = this.pensioneRepository.create({
+      fechaInicio: createPensioneDto.fechaInicio.slice(0, 10) as any,
+      cantidadCompletos: createPensioneDto.cantidadCompletos,
+      completosDisponibles: createPensioneDto.completosDisponibles,
+      estado: createPensioneDto.estado,
+      pensionado,
+    });
 
-const pension =
-  this.pensioneRepository.create({
-    fechaInicio:
-      createPensioneDto.fechaInicio.slice(0, 10) as any,
-
-    cantidadCompletos:
-      createPensioneDto.cantidadCompletos,
-
-    completosDisponibles:
-      createPensioneDto.completosDisponibles,
-
-    estado:
-      createPensioneDto.estado,
-
-    pensionado,
-  });
-
-return await this.pensioneRepository.save(
-  pension,
-);
-
-
-}
+    return await this.pensioneRepository.save(pension);
+  }
 
 async findAll() {
 

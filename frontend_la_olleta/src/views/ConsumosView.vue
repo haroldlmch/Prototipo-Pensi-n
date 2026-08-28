@@ -75,6 +75,37 @@ const tipoConsumoForm = ref('Almuerzo en Comedor');
 const idPensionForm = ref<number | null>(null);
 const idOpcionMenuForm = ref<number | null>(null);
 
+interface ItemPlatoForm {
+  idOpcionMenu: number | null;
+  cantidad: number;
+}
+const platosForm = ref<ItemPlatoForm[]>([]);
+
+const agregarPlatoForm = () => {
+  const defaultId =
+    todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
+  platosForm.value.push({
+    idOpcionMenu: defaultId,
+    cantidad: 1,
+  });
+};
+
+const quitarPlatoForm = (index: number) => {
+  if (platosForm.value.length > 1) {
+    platosForm.value.splice(index, 1);
+  }
+};
+
+const totalPlatosForm = computed(() => {
+  if (modoEdicion.value) return Number(cantidadCompletosForm.value) || 1;
+  return platosForm.value.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+});
+
+const pensionSeleccionadaForm = computed(() => {
+  if (!idPensionForm.value) return null;
+  return pensiones.value.find((p) => p.id === idPensionForm.value) || null;
+});
+
 // Filtros de tabla
 const busquedaTabla = ref('');
 const busquedaFecha = ref<Date | null>(null);
@@ -231,11 +262,11 @@ const nuevoConsumoClasico = () => {
   modoEdicion.value = false;
   consumoId.value = null;
   fechaForm.value = obtenerFechaLocal();
-  cantidadCompletosForm.value = 1;
   tipoConsumoForm.value = 'Almuerzo en Comedor';
   idPensionForm.value = null;
-  idOpcionMenuForm.value =
+  const defaultId =
     todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
+  platosForm.value = [{ idOpcionMenu: defaultId, cantidad: 1 }];
   errorMensaje.value = '';
   visibleModal.value = true;
 };
@@ -253,34 +284,89 @@ const editarConsumo = (c: Consumo) => {
 };
 
 const guardarConsumoFormulario = async () => {
-  if (!idPensionForm.value || !idOpcionMenuForm.value || !fechaForm.value) {
+  if (!idPensionForm.value || !fechaForm.value) {
     errorMensaje.value = 'Complete todos los campos obligatorios';
     return;
   }
 
-  guardando.value = true;
-  try {
-    const payload = {
-      idPension: idPensionForm.value,
-      idOpcionMenu: idOpcionMenuForm.value,
-      fecha: fechaForm.value.slice(0, 10),
-      cantidadCompletos: Number(cantidadCompletosForm.value) || 1,
-      tipoConsumo: tipoConsumoForm.value,
-    };
+  const p = pensionSeleccionadaForm.value;
+  if (!p) {
+    errorMensaje.value = 'Seleccione una pensión válida';
+    return;
+  }
 
-    if (modoEdicion.value && consumoId.value) {
-      await api.patch(`/consumos/${consumoId.value}`, payload);
-    } else {
-      await api.post('/consumos', payload);
+  if (modoEdicion.value) {
+    if (!idOpcionMenuForm.value) {
+      errorMensaje.value = 'Seleccione el plato a consumir';
+      return;
     }
 
-    visibleModal.value = false;
-    await cargarDatos();
-  } catch (error: any) {
-    errorMensaje.value =
-      error.response?.data?.message || 'Error al guardar consumo';
-  } finally {
-    guardando.value = false;
+    guardando.value = true;
+    try {
+      const payload = {
+        idPension: idPensionForm.value,
+        idOpcionMenu: idOpcionMenuForm.value,
+        fecha: fechaForm.value.slice(0, 10),
+        cantidadCompletos: Number(cantidadCompletosForm.value) || 1,
+        tipoConsumo: tipoConsumoForm.value,
+      };
+
+      if (consumoId.value) {
+        await api.patch(`/consumos/${consumoId.value}`, payload);
+      }
+
+      visibleModal.value = false;
+      await cargarDatos();
+    } catch (error: any) {
+      errorMensaje.value =
+        error.response?.data?.message || 'Error al guardar consumo';
+    } finally {
+      guardando.value = false;
+    }
+  } else {
+    // Validar lista de platos múltiples
+    if (platosForm.value.length === 0) {
+      errorMensaje.value = 'Agregue al menos un plato a la lista';
+      return;
+    }
+
+    for (let i = 0; i < platosForm.value.length; i++) {
+      const item = platosForm.value[i];
+      if (!item || !item.idOpcionMenu) {
+        errorMensaje.value = `Seleccione el segundo en la fila #${i + 1}`;
+        return;
+      }
+      if (!item.cantidad || item.cantidad <= 0) {
+        errorMensaje.value = `Indique una cantidad válida en la fila #${i + 1}`;
+        return;
+      }
+    }
+
+    if (totalPlatosForm.value > p.completosDisponibles) {
+      errorMensaje.value = `La pensión solo tiene ${p.completosDisponibles} almuerzo(s) disponible(s), pero seleccionaste un total de ${totalPlatosForm.value} platos.`;
+      return;
+    }
+
+    guardando.value = true;
+    try {
+      for (const item of platosForm.value) {
+        await api.post('/consumos', {
+          idPension: idPensionForm.value,
+          idOpcionMenu: item.idOpcionMenu,
+          fecha: fechaForm.value.slice(0, 10),
+          cantidadCompletos: Number(item.cantidad),
+          tipoConsumo: tipoConsumoForm.value,
+        });
+      }
+
+      visibleModal.value = false;
+      await cargarDatos();
+    } catch (error: any) {
+      errorMensaje.value =
+        error.response?.data?.message || 'Error al registrar los consumos';
+    } finally {
+      guardando.value = false;
+    }
   }
 };
 
@@ -728,41 +814,31 @@ onMounted(() => {
     <Dialog
       v-model:visible="visibleModal"
       modal
-      :header="modoEdicion ? 'Editar Consumo' : 'Nuevo Consumo Manual'"
-      :style="{ width: '480px' }"
+      :header="modoEdicion ? 'Editar Consumo' : 'Nuevo Consumo Manual / Múltiples Platos'"
+      :style="{ width: '640px' }"
     >
       <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
         <Message v-if="errorMensaje" severity="error" :closable="false">
           {{ errorMensaje }}
         </Message>
 
+        <!-- Selección de Pensión -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensión / Pensionado *</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Pensión / Pensionado *</label>
           <Select
             v-model="idPensionForm"
-            :options="pensiones"
+            :options="pensionesActivas"
             optionValue="id"
-            :optionLabel="(p: any) => `${p.pensionado?.nombreCompleto || 'Sin nombre'} - Pensión #${p.id} (${p.completosDisponibles} disp.)`"
-            placeholder="Seleccione la pensión..."
+            :optionLabel="(p: any) => `${p.pensionado?.nombreCompleto || 'Sin nombre'} (${p.completosDisponibles} almuerzos disp.)`"
+            placeholder="Seleccione el pensionado..."
             fluid
           />
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Plato Fuerte / Segundo *</label>
-          <Select
-            v-model="idOpcionMenuForm"
-            :options="todasLasOpciones"
-            optionLabel="nombreSegundo"
-            optionValue="id"
-            placeholder="Seleccione el plato..."
-            fluid
-          />
-        </div>
-
+        <!-- Fecha y Modalidad -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha *</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Fecha *</label>
             <input
               v-model="fechaForm"
               type="date"
@@ -778,7 +854,31 @@ onMounted(() => {
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Cantidad de Platos *</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Modalidad</label>
+            <Select
+              v-model="tipoConsumoForm"
+              :options="tiposConsumo"
+              fluid
+            />
+          </div>
+        </div>
+
+        <!-- Modo Edición: Formulario Simple -->
+        <div v-if="modoEdicion" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo *</label>
+            <Select
+              v-model="idOpcionMenuForm"
+              :options="todasLasOpciones"
+              optionLabel="nombreSegundo"
+              optionValue="id"
+              placeholder="Seleccione el plato..."
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Cantidad de Platos *</label>
             <InputNumber
               v-model="cantidadCompletosForm"
               :min="1"
@@ -789,21 +889,121 @@ onMounted(() => {
           </div>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Modalidad de Consumo</label>
-          <Select
-            v-model="tipoConsumoForm"
-            :options="tiposConsumo"
-            fluid
-          />
+        <!-- Modo Creación: Lista Dinámica de Platos y Cantidades -->
+        <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-weight: 800; color: #1e293b; font-size: 0.9rem;">
+              🍛 Platos Fuertes / Segundos Seleccionados
+            </label>
+            <Button
+              label="Agregar otro segundo"
+              icon="pi pi-plus"
+              size="small"
+              severity="secondary"
+              outlined
+              style="font-size: 0.75rem; padding: 0.35rem 0.65rem;"
+              @click="agregarPlatoForm"
+            />
+          </div>
+
+          <!-- Cabeceras de columnas -->
+          <div style="display: flex; gap: 0.75rem; padding: 0 0.5rem; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            <div style="flex: 1;">Segundo del Menú</div>
+            <div style="width: 140px; text-align: center;">Cantidad</div>
+            <div style="width: 36px;"></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 250px; overflow-y: auto; padding-right: 0.25rem;">
+            <div
+              v-for="(item, idx) in platosForm"
+              :key="idx"
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 0.6rem 0.75rem;
+              "
+            >
+              <div style="flex: 1;">
+                <Select
+                  v-model="item.idOpcionMenu"
+                  :options="todasLasOpciones"
+                  optionLabel="nombreSegundo"
+                  optionValue="id"
+                  placeholder="Seleccione segundo..."
+                  fluid
+                />
+              </div>
+
+              <!-- Selector de Cantidad Cómodo y Visible -->
+              <div style="width: 140px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+                <Button
+                  icon="pi pi-minus"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  style="width: 28px; height: 28px; padding: 0;"
+                  :disabled="item.cantidad <= 1"
+                  @click="item.cantidad = Math.max(1, item.cantidad - 1)"
+                />
+                <span style="font-weight: 800; font-size: 1.1rem; color: #1e293b; min-width: 28px; text-align: center;">
+                  {{ item.cantidad }}
+                </span>
+                <Button
+                  icon="pi pi-plus"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  style="width: 28px; height: 28px; padding: 0;"
+                  :disabled="item.cantidad >= 10"
+                  @click="item.cantidad = Math.min(10, item.cantidad + 1)"
+                />
+              </div>
+
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                :disabled="platosForm.length <= 1"
+                title="Quitar este plato"
+                @click="quitarPlatoForm(idx)"
+              />
+            </div>
+          </div>
+
+          <!-- Resumen de Almuerzos a Descontar -->
+          <div
+            style="
+              background: #fff7ed;
+              border: 1px solid #fed7aa;
+              border-radius: 10px;
+              padding: 0.75rem 1rem;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div style="font-size: 0.82rem; color: #9a3412; font-weight: 600;">
+              Total a Descontar: <strong>{{ totalPlatosForm }} almuerzo(s)</strong>
+            </div>
+            <div style="font-size: 0.82rem; color: #78716c;">
+              Disponibles: <strong>{{ pensionSeleccionadaForm ? pensionSeleccionadaForm.completosDisponibles : '-' }} platos</strong>
+            </div>
+          </div>
         </div>
 
         <Button
-          label="Guardar Consumo"
-          icon="pi pi-save"
+          :label="modoEdicion ? 'Actualizar Consumo' : `Registrar Consumo (${totalPlatosForm} plato${totalPlatosForm > 1 ? 's' : ''})`"
+          icon="pi pi-check"
           severity="success"
           :loading="guardando"
-          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 600;"
+          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 700;"
           fluid
           @click="guardarConsumoFormulario"
         />

@@ -20,9 +20,14 @@ interface VentaCasual {
   precioUnitario: number | string;
   montoTotal: number | string;
   metodoPago?: string;
+  opcionMenu?: {
+    id: number;
+    nombreSegundo: string;
+  };
 }
 
 const ventas = ref<VentaCasual[]>([]);
+const todasLasOpciones = ref<{ id: number; nombreSegundo: string }[]>([]);
 const busquedaFecha = ref<Date | null>(null);
 const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
@@ -60,20 +65,60 @@ const eliminando = ref(false);
 
 const ventaId = ref<number | null>(null);
 const fecha = ref('');
+const idOpcionMenu = ref<number | null>(null);
 const cantidadCompletos = ref<number | null>(1);
 const precioUnitario = ref<number | null>(null);
 const montoTotal = ref<number | null>(null);
 
-const formularioValido = computed(
-  () =>
+interface ItemPlatoVenta {
+  idOpcionMenu: number | null;
+  cantidad: number;
+}
+
+const platosVentaForm = ref<ItemPlatoVenta[]>([]);
+
+const agregarPlatoVenta = () => {
+  const defaultId =
+    todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
+  platosVentaForm.value.push({
+    idOpcionMenu: defaultId,
+    cantidad: 1,
+  });
+};
+
+const quitarPlatoVenta = (index: number) => {
+  if (platosVentaForm.value.length > 1) {
+    platosVentaForm.value.splice(index, 1);
+  }
+};
+
+const totalPlatosVenta = computed(() => {
+  if (modoEdicion.value) return Number(cantidadCompletos.value) || 1;
+  return platosVentaForm.value.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
+});
+
+const totalMontoCalculado = computed(() => {
+  const precio = Number(precioUnitario.value) || 0;
+  return totalPlatosVenta.value * precio;
+});
+
+const formularioValido = computed(() => {
+  if (modoEdicion.value) {
+    return (
+      Boolean(fecha.value) &&
+      cantidadCompletos.value !== null &&
+      cantidadCompletos.value >= 1 &&
+      precioUnitario.value !== null &&
+      precioUnitario.value >= 0
+    );
+  }
+  return (
     Boolean(fecha.value) &&
-    cantidadCompletos.value !== null &&
-    cantidadCompletos.value >= 1 &&
+    platosVentaForm.value.length > 0 &&
     precioUnitario.value !== null &&
-    precioUnitario.value >= 0 &&
-    montoTotal.value !== null &&
-    montoTotal.value >= 0,
-);
+    precioUnitario.value >= 0
+  );
+});
 
 const totalVentas = computed(() =>
   ventas.value.reduce((total, venta) => total + Number(venta.montoTotal), 0),
@@ -98,14 +143,24 @@ const cargarVentas = async () => {
   errorMensaje.value = '';
 
   try {
-    const [ventasResponse, configResponse] = await Promise.all([
+    const [ventasResponse, configResponse, menusResponse] = await Promise.all([
       api.get('/ventas-casuales'),
       api.get('/configuracion'),
+      api.get('/menus'),
     ]);
     ventas.value = ventasResponse.data;
     const config = Array.isArray(configResponse.data) ? configResponse.data[0] : configResponse.data;
     if (config) {
       precioCasualSugerido.value = Number(config.precioCasual);
+    }
+
+    // Obtener menú de hoy para opciones de platos
+    const hoyStr = obtenerFechaLocal();
+    const mHoy = menusResponse.data.find((m: any) => (m.fecha || '').slice(0, 10) === hoyStr);
+    if (mHoy && mHoy.opcionesMenu && mHoy.opcionesMenu.length > 0) {
+      todasLasOpciones.value = mHoy.opcionesMenu;
+    } else if (menusResponse.data.length > 0) {
+      todasLasOpciones.value = menusResponse.data[0].opcionesMenu || [];
     }
   } catch (error) {
     errorMensaje.value = obtenerMensajeError(error);
@@ -117,10 +172,13 @@ const cargarVentas = async () => {
 const limpiarFormulario = () => {
   ventaId.value = null;
   fecha.value = obtenerFechaLocal();
+  const defaultId = todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
+  idOpcionMenu.value = defaultId;
   cantidadCompletos.value = 1;
-  precioUnitario.value = null;
+  precioUnitario.value = precioCasualSugerido.value || 18;
   montoTotal.value = null;
   metodoPago.value = 'Efectivo';
+  platosVentaForm.value = [{ idOpcionMenu: defaultId, cantidad: 1 }];
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
@@ -129,7 +187,6 @@ const nuevaVenta = () => {
   limpiarFormulario();
   if (precioCasualSugerido.value !== null) {
     precioUnitario.value = precioCasualSugerido.value;
-    montoTotal.value = precioCasualSugerido.value * (cantidadCompletos.value ?? 1);
   }
   visible.value = true;
 };
@@ -137,6 +194,7 @@ const nuevaVenta = () => {
 const editarVenta = (venta: VentaCasual) => {
   ventaId.value = venta.id;
   fecha.value = venta.fecha.slice(0, 10);
+  idOpcionMenu.value = venta.opcionMenu?.id || null;
   cantidadCompletos.value = venta.cantidadCompletos;
   precioUnitario.value = Number(venta.precioUnitario);
   montoTotal.value = Number(venta.montoTotal);
@@ -147,36 +205,80 @@ const editarVenta = (venta: VentaCasual) => {
 };
 
 const guardarVenta = async () => {
-  if (!formularioValido.value) {
-    errorMensaje.value = 'Complete todos los campos requeridos.';
-    return;
-  }
-
-  guardando.value = true;
-  errorMensaje.value = '';
-
-  const payload = {
-    fecha: convertirFechaISO(fecha.value),
-    cantidadCompletos: Number(cantidadCompletos.value),
-    precioUnitario: Number(precioUnitario.value),
-    montoTotal: Number(montoTotal.value),
-    metodoPago: metodoPago.value,
-  };
-
-  try {
-    if (modoEdicion.value) {
-      await api.patch(`/ventas-casuales/${ventaId.value}`, payload);
-    } else {
-      await api.post('/ventas-casuales', payload);
+  if (modoEdicion.value) {
+    if (!idOpcionMenu.value || !cantidadCompletos.value || !precioUnitario.value) {
+      errorMensaje.value = 'Complete todos los campos requeridos.';
+      return;
     }
 
-    visible.value = false;
-    limpiarFormulario();
-    await cargarVentas();
-  } catch (error) {
-    errorMensaje.value = obtenerMensajeError(error);
-  } finally {
-    guardando.value = false;
+    guardando.value = true;
+    errorMensaje.value = '';
+
+    const payload = {
+      fecha: convertirFechaISO(fecha.value),
+      idOpcionMenu: idOpcionMenu.value,
+      cantidadCompletos: Number(cantidadCompletos.value),
+      precioUnitario: Number(precioUnitario.value),
+      montoTotal: Number(cantidadCompletos.value) * Number(precioUnitario.value),
+      metodoPago: metodoPago.value,
+    };
+
+    try {
+      if (ventaId.value) {
+        await api.patch(`/ventas-casuales/${ventaId.value}`, payload);
+      }
+      visible.value = false;
+      limpiarFormulario();
+      await cargarVentas();
+    } catch (error) {
+      errorMensaje.value = obtenerMensajeError(error);
+    } finally {
+      guardando.value = false;
+    }
+  } else {
+    // Validar lista de platos múltiples
+    if (platosVentaForm.value.length === 0) {
+      errorMensaje.value = 'Agregue al menos un plato a la lista.';
+      return;
+    }
+
+    for (let i = 0; i < platosVentaForm.value.length; i++) {
+      const item = platosVentaForm.value[i];
+      if (!item || !item.idOpcionMenu) {
+        errorMensaje.value = `Seleccione el plato en la fila #${i + 1}.`;
+        return;
+      }
+      if (!item.cantidad || item.cantidad <= 0) {
+        errorMensaje.value = `Indique una cantidad válida en la fila #${i + 1}.`;
+        return;
+      }
+    }
+
+    const precio = Number(precioUnitario.value) || 0;
+
+    guardando.value = true;
+    errorMensaje.value = '';
+
+    try {
+      for (const item of platosVentaForm.value) {
+        await api.post('/ventas-casuales', {
+          fecha: convertirFechaISO(fecha.value),
+          idOpcionMenu: item.idOpcionMenu,
+          cantidadCompletos: Number(item.cantidad),
+          precioUnitario: precio,
+          montoTotal: Number(item.cantidad) * precio,
+          metodoPago: metodoPago.value,
+        });
+      }
+
+      visible.value = false;
+      limpiarFormulario();
+      await cargarVentas();
+    } catch (error) {
+      errorMensaje.value = obtenerMensajeError(error);
+    } finally {
+      guardando.value = false;
+    }
   }
 };
 
@@ -317,9 +419,19 @@ onMounted(cargarVentas);
         class="p-datatable-sm"
       >
 
-        <Column header="Fecha" style="color: #475569; font-weight: 600;">
+        <Column header="Fecha" style="color: #475569; font-weight: 600; width: 140px;">
           <template #body="slotProps">
             {{ formatearFecha(slotProps.data.fecha) }}
+          </template>
+        </Column>
+
+        <Column header="Plato / Segundo" style="color: #334155; font-weight: 600;">
+          <template #body="slotProps">
+            <Tag
+              :value="slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo del Día'"
+              severity="info"
+              rounded
+            />
           </template>
         </Column>
 
@@ -388,8 +500,8 @@ onMounted(cargarVentas);
     <Dialog
       v-model:visible="visible"
       modal
-      :header="modoEdicion ? 'Editar Venta Casual' : 'Nueva Venta Casual'"
-      :style="{ width: '480px' }"
+      :header="modoEdicion ? 'Editar Venta Casual' : 'Nueva Venta Casual / Múltiples Platos'"
+      :style="{ width: '640px' }"
     >
       <div class="formulario">
         <Message
@@ -402,17 +514,32 @@ onMounted(cargarVentas);
         </Message>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <!-- Fecha Automática No Editable -->
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
-            <input
-              v-model="fecha"
-              type="date"
-              class="input-fecha-custom"
-            />
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Fecha</label>
+            <div
+              style="
+                width: 100%;
+                padding: 0.65rem 0.85rem;
+                background: #f1f5f9;
+                border: 1px solid #cbd5e1;
+                border-radius: 8px;
+                color: #475569;
+                font-weight: 600;
+                font-size: 0.9rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                box-sizing: border-box;
+              "
+            >
+              <i class="pi pi-calendar" style="color: #64748b;"></i>
+              <span>{{ formatearFecha(fecha) || 'Hoy' }}</span>
+            </div>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Método de Pago</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Método de Pago</label>
             <Select
               v-model="metodoPago"
               :options="metodosPago"
@@ -421,48 +548,167 @@ onMounted(cargarVentas);
           </div>
         </div>
 
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Cantidad de Completos</label>
-          <InputNumber
-            v-model="cantidadCompletos"
-            :min="1"
-            showButtons
-            fluid
-          />
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <!-- Modo Edición: Formulario Simple -->
+        <div v-if="modoEdicion" style="display: flex; flex-direction: column; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Precio Unitario</label>
-            <InputNumber
-              v-model="precioUnitario"
-              mode="currency"
-              currency="BOB"
-              locale="es-BO"
-              :min="0"
-              disabled
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo *</label>
+            <Select
+              v-model="idOpcionMenu"
+              :options="todasLasOpciones"
+              optionLabel="nombreSegundo"
+              optionValue="id"
+              placeholder="Seleccione el plato del día..."
               fluid
             />
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Monto Total</label>
-            <InputNumber
-              v-model="montoTotal"
-              mode="currency"
-              currency="BOB"
-              locale="es-BO"
-              :min="0"
-              disabled
-              fluid
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Cantidad de Completos</label>
+              <InputNumber
+                v-model="cantidadCompletos"
+                :min="1"
+                showButtons
+                fluid
+              />
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Precio Unitario</label>
+              <InputNumber
+                v-model="precioUnitario"
+                mode="currency"
+                currency="BOB"
+                locale="es-BO"
+                :min="0"
+                fluid
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Modo Creación: Múltiples Segundos con Cantidad -->
+        <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-weight: 800; color: #1e293b; font-size: 0.9rem;">
+              🍛 Platos Fuertes / Segundos a Vender
+            </label>
+            <Button
+              label="Agregar otro segundo"
+              icon="pi pi-plus"
+              size="small"
+              severity="secondary"
+              outlined
+              style="font-size: 0.75rem; padding: 0.35rem 0.65rem;"
+              @click="agregarPlatoVenta"
             />
+          </div>
+
+          <!-- Cabeceras de columnas -->
+          <div style="display: flex; gap: 0.75rem; padding: 0 0.5rem; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
+            <div style="flex: 1;">Segundo del Menú</div>
+            <div style="width: 140px; text-align: center;">Cantidad</div>
+            <div style="width: 36px;"></div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.6rem; max-height: 250px; overflow-y: auto; padding-right: 0.25rem;">
+            <div
+              v-for="(item, idx) in platosVentaForm"
+              :key="idx"
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 0.6rem 0.75rem;
+              "
+            >
+              <div style="flex: 1;">
+                <Select
+                  v-model="item.idOpcionMenu"
+                  :options="todasLasOpciones"
+                  optionLabel="nombreSegundo"
+                  optionValue="id"
+                  placeholder="Seleccione segundo..."
+                  fluid
+                />
+              </div>
+
+              <!-- Selector de Cantidad Cómodo y Visible -->
+              <div style="width: 140px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+                <Button
+                  icon="pi pi-minus"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  style="width: 28px; height: 28px; padding: 0;"
+                  :disabled="item.cantidad <= 1"
+                  @click="item.cantidad = Math.max(1, item.cantidad - 1)"
+                />
+                <span style="font-weight: 800; font-size: 1.1rem; color: #1e293b; min-width: 28px; text-align: center;">
+                  {{ item.cantidad }}
+                </span>
+                <Button
+                  icon="pi pi-plus"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  style="width: 28px; height: 28px; padding: 0;"
+                  :disabled="item.cantidad >= 10"
+                  @click="item.cantidad = Math.min(10, item.cantidad + 1)"
+                />
+              </div>
+
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                :disabled="platosVentaForm.length <= 1"
+                title="Quitar este plato"
+                @click="quitarPlatoVenta(idx)"
+              />
+            </div>
+          </div>
+
+          <!-- Resumen de Cobro -->
+          <div
+            style="
+              background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+              border: 1.5px solid #86efac;
+              border-radius: 12px;
+              padding: 0.85rem 1.25rem;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            "
+          >
+            <div>
+              <div style="font-size: 0.82rem; color: #166534; font-weight: 700; text-transform: uppercase;">
+                {{ totalPlatosVenta }} plato(s) a {{ formatearMonto(precioUnitario || 0) }} c/u
+              </div>
+              <div style="font-size: 0.75rem; color: #15803d;">
+                Método de cobro: <strong>{{ metodoPago }}</strong>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 0.75rem; color: #166534; font-weight: 600;">Total a Cobrar:</div>
+              <div style="font-size: 1.5rem; font-weight: 900; color: #14532d;">
+                {{ formatearMonto(totalMontoCalculado) }}
+              </div>
+            </div>
           </div>
         </div>
 
         <Button
-          label="Guardar Registro de Venta"
-          icon="pi pi-save"
-          style="margin-top: 0.5rem; padding: 0.75rem;"
+          :label="modoEdicion ? 'Actualizar Venta' : `Registrar Venta (Cobrar ${formatearMonto(totalMontoCalculado)})`"
+          icon="pi pi-check"
+          severity="success"
+          style="margin-top: 0.5rem; padding: 0.75rem; font-weight: 700;"
           :loading="guardando"
           :disabled="!formularioValido"
           fluid

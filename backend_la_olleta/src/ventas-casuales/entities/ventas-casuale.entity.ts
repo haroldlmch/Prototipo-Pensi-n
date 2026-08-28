@@ -1,8 +1,9 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { OpcionesMenu } from "src/opciones-menu/entities/opciones-menu.entity";
 
 @Entity('ventas_casuales')
 export class VentasCasuale {
-     @PrimaryGeneratedColumn('identity')
+  @PrimaryGeneratedColumn('identity')
   id!: number;
 
   @Column('date', {
@@ -36,9 +37,20 @@ export class VentasCasuale {
   })
   metodoPago!: string;
 
+  @ManyToOne(
+    () => OpcionesMenu,
+    {
+      nullable: true,
+      onDelete: 'SET NULL',
+    },
+  )
+  @JoinColumn({
+    name: 'id_opcion_menu',
+  })
+  opcionMenu?: OpcionesMenu;
+
   @CreateDateColumn({
     name: 'fecha_creacion',
   })
   fechaCreacion!: Date;
-
 }

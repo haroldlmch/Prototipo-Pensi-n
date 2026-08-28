@@ -41,16 +41,18 @@ if (!pension) {
   );
 }
 
-    // Actualizar y recargar la pensión con la cantidad de platos indicada
-    const nuevaCantidad =
+    const cantidadPagada =
       createPagoDto.cantidadCompletos && createPagoDto.cantidadCompletos > 0
         ? createPagoDto.cantidadCompletos
         : pension.cantidadCompletos;
 
-    pension.cantidadCompletos = nuevaCantidad;
-    pension.completosDisponibles = nuevaCantidad;
-    pension.estado = 'ACTIVA';
-    await this.pensionRepository.save(pension);
+    // Solo si la pensión estaba agotada con 0 disponibles, reactivarla
+    if (pension.completosDisponibles === 0 && pension.estado === 'AGOTADA') {
+      pension.cantidadCompletos = cantidadPagada;
+      pension.completosDisponibles = cantidadPagada;
+      pension.estado = 'ACTIVA';
+      await this.pensionRepository.save(pension);
+    }
 
     const pago =
       this.pagoRepository.create({
@@ -61,7 +63,7 @@ if (!pension) {
           createPagoDto.precioUnitario,
 
         cantidadCompletos:
-          nuevaCantidad,
+          cantidadPagada,
 
         montoTotal:
           createPagoDto.montoTotal,

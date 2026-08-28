@@ -143,19 +143,66 @@ export class WhatsappService implements OnModuleInit {
     let sender = msg.key.participant || remoteJid;
     const pushName = msg.pushName || '';
 
-    // Si WhatsApp envía el ID privado @lid en un grupo, resolver el número de teléfono real
-    if (isGroup && sender.endsWith('@lid')) {
-      try {
-        const groupMeta = await this.sock?.groupMetadata(remoteJid);
-        const participantObj = groupMeta?.participants?.find(
-          (p: any) => p.lid === sender || p.id === sender,
-        );
-        if (participantObj && participantObj.id) {
-          this.logger.log(`🔍 Mapeado LID ${sender} -> Número real: ${participantObj.id}`);
-          sender = participantObj.id;
+    // Si WhatsApp envía el ID privado @lid (en grupos o chats directos), resolver el número de teléfono real
+    if (sender.includes('@lid')) {
+      const senderLidDigits = sender.replace(/\D/g, '');
+
+      // 1. Verificar si Baileys ya incluye el JID con número de teléfono en las propiedades del mensaje
+      if ((msg.key as any).participantPn) {
+        sender = (msg.key as any).participantPn;
+        this.logger.log(`🔍 Teléfono extraído de participantPn: ${sender}`);
+      } else if ((msg.key as any).remoteJidPn) {
+        sender = (msg.key as any).remoteJidPn;
+        this.logger.log(`🔍 Teléfono extraído de remoteJidPn: ${sender}`);
+      } else {
+        // 2. Resolver a través de los participantes del grupo
+        try {
+          let foundRealPn: string | null = null;
+
+          if (isGroup) {
+            const groupMeta = await this.sock?.groupMetadata(remoteJid);
+            if (groupMeta && groupMeta.participants) {
+              const participantObj = groupMeta.participants.find((p: any) => {
+                const pLidDigits = (p.lid || '').replace(/\D/g, '');
+                const pIdDigits = (p.id || '').replace(/\D/g, '');
+                return (pLidDigits && pLidDigits === senderLidDigits) || (pIdDigits && pIdDigits === senderLidDigits);
+              });
+
+              if (participantObj) {
+                if (participantObj.id && !participantObj.id.includes('@lid')) {
+                  foundRealPn = participantObj.id;
+                } else if ((participantObj as any).pn) {
+                  foundRealPn = (participantObj as any).pn;
+                }
+              }
+            }
+          }
+
+          // 3. Si no se encontró en el grupo actual o es chat privado, buscar en los grupos donde participa el bot
+          if (!foundRealPn && this.sock?.groupFetchAllParticipating) {
+            const allGroups = await this.sock.groupFetchAllParticipating();
+            for (const gId in allGroups) {
+              const g = allGroups[gId];
+              const pObj = g?.participants?.find((p: any) => {
+                const pLid = (p.lid || '').replace(/\D/g, '');
+                return pLid && pLid === senderLidDigits;
+              });
+              if (pObj && pObj.id && !pObj.id.includes('@lid')) {
+                foundRealPn = pObj.id;
+                break;
+              }
+            }
+          }
+
+          if (foundRealPn) {
+            this.logger.log(`🔍 Mapeado LID ${sender} -> Número real de teléfono: ${foundRealPn}`);
+            sender = foundRealPn;
+          } else {
+            this.logger.warn(`No se pudo resolver el número real para el LID ${sender}. Se intentará con pushName "${pushName}"`);
+          }
+        } catch (err) {
+          this.logger.debug('Error al intentar resolver LID:', err);
         }
-      } catch (err) {
-        this.logger.debug('No se pudo resolver LID con groupMetadata:', err);
       }
     }
 
@@ -340,16 +387,18 @@ Si deseas adquirir un plan mensual o realizar una venta casual, comunícate con 
       return;
     }
 
-    // 2. Buscar Pensión Activa con saldo disponible
-    const pension = await this.pensionRepository.findOne({
+    // 2. Buscar Pensión Activa con saldo disponible (más reciente por ID)
+    const pensiones = await this.pensionRepository.find({
       where: {
         pensionado: { id: pensionado.id },
         estado: 'ACTIVA',
       },
       order: {
-        fechaInicio: 'DESC',
+        id: 'DESC',
       },
     });
+
+    const pension = pensiones.find((p) => p.completosDisponibles > 0) || pensiones[0] || null;
 
     if (!pension || pension.completosDisponibles <= 0) {
       this.logger.warn(`Pensionado ${pensionado.nombreCompleto} no tiene pensión activa con saldo.`);

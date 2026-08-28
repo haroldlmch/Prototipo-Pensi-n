@@ -28,4 +28,8 @@ montoTotal!: number;
 @IsString()
 metodoPago?: string;
 
+@IsOptional()
+@IsInt()
+idOpcionMenu?: number;
+
 }

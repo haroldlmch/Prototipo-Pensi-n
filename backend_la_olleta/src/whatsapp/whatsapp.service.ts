@@ -9,6 +9,7 @@ import { Pensionado } from '../pensionados/entities/pensionado.entity';
 import { Pensione } from '../pensiones/entities/pensione.entity';
 import { Menu } from '../menus/entities/menu.entity';
 import { OpcionesMenu } from '../opciones-menu/entities/opciones-menu.entity';
+import { Consumo } from '../consumos/entities/consumo.entity';
 import { ConsumosService } from '../consumos/consumos.service';
 
 @Injectable()
@@ -31,6 +32,9 @@ export class WhatsappService implements OnModuleInit {
 
     @InjectRepository(OpcionesMenu)
     private readonly opcionMenuRepository: Repository<OpcionesMenu>,
+
+    @InjectRepository(Consumo)
+    private readonly consumoRepository: Repository<Consumo>,
 
     private readonly consumosService: ConsumosService,
   ) {}
@@ -122,21 +126,28 @@ export class WhatsappService implements OnModuleInit {
 
     if (!text) return;
 
-    // Comando para consultar ID de grupo
-    if (text.toLowerCase() === '#id_grupo') {
+    // Comandos reconocidos: #id_grupo, #pedido, #cancelar, #saldo, #ayuda
+    const textLower = text.toLowerCase();
+
+    // 1. Comando para consultar ID de grupo
+    if (textLower === '#id_grupo') {
       await this.sock?.sendMessage(remoteJid, {
         text: `📋 *ID de este grupo:* \`${remoteJid}\`\n\nPuedes registrar este ID en el sistema para limitar los pedidos a este grupo.`,
       });
       return;
     }
 
-    // Filtrar si hay grupo objetivo
+    // Filtrar si hay grupo objetivo configurado
     if (this.targetGroupId && remoteJid !== this.targetGroupId) {
       return;
     }
 
-    // Procesar solo si empieza con #pedido
-    if (!text.toLowerCase().startsWith('#pedido')) {
+    const esPedido = textLower.startsWith('#pedido');
+    const esCancelar = textLower.startsWith('#cancelar') || textLower.startsWith('#cancelarpedido') || textLower.startsWith('#cancelar_pedido');
+    const esSaldo = textLower === '#saldo' || textLower === '#consultar' || textLower === '#platos';
+    const esAyuda = textLower === '#ayuda' || textLower === '#comandos' || textLower === '#menu_ayuda';
+
+    if (!esPedido && !esCancelar && !esSaldo && !esAyuda) {
       return;
     }
 
@@ -207,11 +218,41 @@ export class WhatsappService implements OnModuleInit {
     }
 
     const rawPhone = sender.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/:\d+/, '');
-    const pedidoDetalle = text.substring(7).trim();
+    const mentionJid = msg.key.participant || remoteJid;
 
-    this.logger.log(`📩 Pedido recibido de +${rawPhone} (${pushName || 'Sin alias'}): "${pedidoDetalle}"`);
+    if (esAyuda) {
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`🤖 *L'OLLETA - COMANDOS DISPONIBLES*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• *#pedido [platos]* : Reservar tu almuerzo de hoy.
+  _Ejemplo:_ \`#pedido 1 salpicon, 1 chuleta, 2 sopas\`
+• *#cancelar* : Cancelar tu pedido de hoy y devolver tus platos.
+• *#saldo* : Consultar tus almuerzos disponibles.
+• *#ayuda* : Ver esta lista de comandos.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
 
-    await this.processOrder(remoteJid, msg.key.participant || remoteJid, rawPhone, pushName, pedidoDetalle);
+    if (esCancelar) {
+      this.logger.log(`🚫 Solicitud de cancelación recibida de +${rawPhone} (${pushName || 'Sin alias'})`);
+      await this.processCancelOrder(remoteJid, mentionJid, rawPhone, pushName);
+      return;
+    }
+
+    if (esSaldo) {
+      this.logger.log(`📊 Consulta de saldo recibida de +${rawPhone} (${pushName || 'Sin alias'})`);
+      await this.processConsultarSaldo(remoteJid, mentionJid, rawPhone, pushName);
+      return;
+    }
+
+    if (esPedido) {
+      const pedidoDetalle = text.substring(7).trim();
+      this.logger.log(`📩 Pedido recibido de +${rawPhone} (${pushName || 'Sin alias'}): "${pedidoDetalle}"`);
+      await this.processOrder(remoteJid, mentionJid, rawPhone, pushName, pedidoDetalle);
+    }
   }
 
   private getFechaLocalStr(d = new Date()): string {
@@ -332,22 +373,7 @@ export class WhatsappService implements OnModuleInit {
     };
   }
 
-  private async processOrder(
-    remoteJid: string,
-    mentionJid: string,
-    rawPhone: string,
-    pushName: string,
-    pedidoDetalle: string,
-  ) {
-    if (!pedidoDetalle) {
-      await this.sock?.sendMessage(remoteJid, {
-        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1 salpicon, 1 chuleta, 2 sopas*`,
-        mentions: [mentionJid],
-      });
-      return;
-    }
-
-    // 1. Buscar si el teléfono coincide con algún Pensionado registrado
+  private async identificarPensionado(rawPhone: string, pushName: string): Promise<Pensionado | null> {
     const allPensionados = await this.pensionadoRepository.find({
       where: { estado: true },
     });
@@ -368,9 +394,30 @@ export class WhatsappService implements OnModuleInit {
         return nomLower.includes(pNameLower) || pNameLower.includes(nomLower);
       });
       if (pensionado) {
-        this.logger.log(`💡 Pensionado encontrado por nombre (${pushName} -> ${pensionado.nombreCompleto})`);
+        this.logger.log(`💡 Pensionado encontrado por alias (${pushName} -> ${pensionado.nombreCompleto})`);
       }
     }
+
+    return pensionado || null;
+  }
+
+  private async processOrder(
+    remoteJid: string,
+    mentionJid: string,
+    rawPhone: string,
+    pushName: string,
+    pedidoDetalle: string,
+  ) {
+    if (!pedidoDetalle) {
+      await this.sock?.sendMessage(remoteJid, {
+        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1 salpicon, 1 chuleta, 2 sopas*`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    // 1. Identificar pensionado
+    const pensionado = await this.identificarPensionado(rawPhone, pushName);
 
     if (!pensionado) {
       this.logger.warn(`Número +${rawPhone} (alias: "${pushName}") no encontrado en base de datos de pensionados.`);
@@ -533,5 +580,180 @@ _Tu pedido ha sido reservado._`;
         mentions: [mentionJid],
       });
     }
+  }
+
+  private async processCancelOrder(
+    remoteJid: string,
+    mentionJid: string,
+    rawPhone: string,
+    pushName: string,
+  ) {
+    const pensionado = await this.identificarPensionado(rawPhone, pushName);
+
+    if (!pensionado) {
+      this.logger.warn(`Número +${rawPhone} (alias: "${pushName}") no encontrado al intentar cancelar pedido.`);
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`👋 *L'OLLETA*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ Hola ${pushName ? '*' + pushName + '*' : ''}, tu número no figura en nuestra lista de pensionados activos.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    const hoyStr = this.getFechaLocalStr();
+
+    // 1. Buscar consumos registrados hoy para este pensionado
+    const consumosHoy = await this.consumoRepository.find({
+      where: {
+        fecha: hoyStr as any,
+        pension: {
+          pensionado: { id: pensionado.id },
+        },
+      },
+      relations: {
+        pension: true,
+        opcionMenu: true,
+      },
+    });
+
+    if (!consumosHoy || consumosHoy.length === 0) {
+      this.logger.log(`Pensionado ${pensionado.nombreCompleto} intentó cancelar pero no tiene pedidos hoy (${hoyStr}).`);
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`⚠️ *L'OLLETA - SIN PEDIDO ACTIVO*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, no tienes ningún pedido registrado para el día de hoy (*${hoyStr}*) para cancelar.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    try {
+      // 2. Agrupar la cantidad de platos a devolver y los nombres de los platos cancelados
+      let totalPlatosDevueltos = 0;
+      const platosCanceladosDetalle: string[] = [];
+
+      // Mapear platos por pensión para devolver el saldo exactamente a su pensión correspondiente
+      const platosPorPension = new Map<number, { pension: Pensione; cantidad: number }>();
+
+      for (const c of consumosHoy) {
+        totalPlatosDevueltos += c.cantidadCompletos;
+        const nombrePlato = c.opcionMenu?.nombreSegundo || 'Plato del día';
+        platosCanceladosDetalle.push(`  • ${c.cantidadCompletos}x ${nombrePlato}`);
+
+        if (c.pension) {
+          const actual = platosPorPension.get(c.pension.id) || { pension: c.pension, cantidad: 0 };
+          actual.cantidad += c.cantidadCompletos;
+          platosPorPension.set(c.pension.id, actual);
+        }
+      }
+
+      // 3. Restaurar los platos en las pensiones correspondientes y asegurar que estén ACTIVAS
+      let nuevoSaldoDisponible = 0;
+      for (const [pensionId, data] of platosPorPension.entries()) {
+        const pensionDB = await this.pensionRepository.findOne({ where: { id: pensionId } });
+        if (pensionDB) {
+          pensionDB.completosDisponibles += data.cantidad;
+          pensionDB.estado = 'ACTIVA';
+          await this.pensionRepository.save(pensionDB);
+          nuevoSaldoDisponible = pensionDB.completosDisponibles;
+        }
+      }
+
+      // 4. Eliminar los registros de consumos de la base de datos
+      await this.consumoRepository.remove(consumosHoy);
+
+      this.logger.log(`🗑️ Pedido cancelado para ${pensionado.nombreCompleto}: ${totalPlatosDevueltos} platos devueltos a la pensión. Nuevo saldo: ${nuevoSaldoDisponible}`);
+
+      // 5. Enviar mensaje de confirmación por WhatsApp
+      const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const replyMessage =
+`🚫 *L'OLLETA - PEDIDO CANCELADO*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ *Estado:* Cancelado con éxito
+👤 *Pensionado:* ${pensionado.nombreCompleto}
+
+📋 *Platos cancelados (${totalPlatosDevueltos} almuerzo${totalPlatosDevueltos > 1 ? 's' : ''}):*
+${platosCanceladosDetalle.join('\n')}
+
+🔄 *Almuerzos devueltos a tu cuenta:* +${totalPlatosDevueltos}
+📊 *Saldo actual disponible:* ${nuevoSaldoDisponible} almuerzos
+⏰ *Hora:* ${horaActual}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+_Tu cupo ha sido liberado y tus platos están listos para tu próximo pedido._`;
+
+      await this.sock?.sendMessage(remoteJid, {
+        text: replyMessage,
+        mentions: [mentionJid],
+      });
+
+    } catch (err: any) {
+      this.logger.error('Error al cancelar pedido por WhatsApp:', err);
+      await this.sock?.sendMessage(remoteJid, {
+        text: `⚠️ Ocurrió un error al cancelar tu pedido: ${err.message || 'Error interno'}`,
+        mentions: [mentionJid],
+      });
+    }
+  }
+
+  private async processConsultarSaldo(
+    remoteJid: string,
+    mentionJid: string,
+    rawPhone: string,
+    pushName: string,
+  ) {
+    const pensionado = await this.identificarPensionado(rawPhone, pushName);
+
+    if (!pensionado) {
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`👋 *L'OLLETA*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ Hola ${pushName ? '*' + pushName + '*' : ''}, tu número no figura en nuestra lista de pensionados activos.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    const pensiones = await this.pensionRepository.find({
+      where: {
+        pensionado: { id: pensionado.id },
+        estado: 'ACTIVA',
+      },
+      order: {
+        id: 'DESC',
+      },
+    });
+
+    const pension = pensiones.find((p) => p.completosDisponibles > 0) || pensiones[0] || null;
+
+    if (!pension) {
+      await this.sock?.sendMessage(remoteJid, {
+        text:
+`⚠️ *L'OLLETA - SIN PENSIÓN ACTIVA*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, actualmente no tienes una pensión activa con saldo.
+Por favor comunícate con administración para renovar tu plan.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    await this.sock?.sendMessage(remoteJid, {
+      text:
+`📊 *L'OLLETA - ESTADO DE CUENTA*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 *Pensionado:* ${pensionado.nombreCompleto}
+📋 *Pensión:* #${pension.id}
+🍽️ *Almuerzos disponibles:* *${pension.completosDisponibles}* de ${pension.cantidadCompletos}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      mentions: [mentionJid],
+    });
   }
 }

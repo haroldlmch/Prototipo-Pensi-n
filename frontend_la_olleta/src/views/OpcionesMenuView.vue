@@ -186,8 +186,7 @@ onMounted(async () => {
       <Button
         label="Nueva Opción"
         icon="pi pi-plus"
-        severity="success"
-        raised
+        style="background: #f97316; border-color: #f97316; color: white; font-weight: 700; border-radius: 10px; padding: 0.75rem 1.25rem; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);"
         @click="nuevoRegistro"
       />
     </div>

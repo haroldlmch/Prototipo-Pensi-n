@@ -349,7 +349,7 @@ onMounted(async () => {
 <template>
   <div style="display: flex; flex-direction: column; gap: 1.5rem;">
     <!-- Cabecera -->
-    <div class="encabezado">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h1 style="margin: 0; font-size: 2rem; font-weight: 800; color: #0f172a; letter-spacing: -0.025em;">
           Pagos
@@ -362,8 +362,7 @@ onMounted(async () => {
       <Button
         label="Nuevo Pago"
         icon="pi pi-plus"
-        severity="success"
-        raised
+        style="background: #f97316; border-color: #f97316; color: white; font-weight: 700; border-radius: 10px; padding: 0.75rem 1.25rem; box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);"
         @click="nuevoPago"
       />
     </div>

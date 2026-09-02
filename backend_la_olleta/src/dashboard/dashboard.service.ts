@@ -160,8 +160,10 @@ export class DashboardService {
     });
 
     extrasHoy.forEach((e) => {
-      // Por defecto los extras se asumen en efectivo si no tienen método especificado
-      efectivo += Number(e.precio || 0);
+      const m = (e.metodoPago || 'Efectivo').toLowerCase();
+      const val = Number(e.precio || 0);
+      if (m.includes('qr')) qr += val;
+      else efectivo += val;
     });
 
     const totalPlatosCasuales = ventasHoy.reduce(

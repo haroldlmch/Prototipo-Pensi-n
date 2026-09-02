@@ -302,18 +302,55 @@ onMounted(() => {
             </span>
           </div>
 
-          <!-- Columna Derecha: Guía rápida -->
-          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem;">
-            <div style="font-weight: 700; color: #1e293b; font-size: 0.85rem; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
-              <i class="pi pi-book" style="color: #16a34a;"></i>
-              Comandos para los Clientes en WhatsApp:
+          <!-- Columna Derecha: Guía rápida de Comandos -->
+          <div style="background: #f8fafc; border: 1px solid #fed7aa; border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="font-weight: 800; color: #1e293b; font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
+              <i class="pi pi-book" style="color: #ea580c; font-size: 1.1rem;"></i>
+              <span>Comandos Disponibles en WhatsApp</span>
             </div>
-            <ul style="margin: 0; padding-left: 1.2rem; font-size: 0.82rem; color: #475569; display: flex; flex-direction: column; gap: 0.35rem;">
-              <li><code>#pedido 1</code>: Pide la 1ª opción del menú de hoy.</li>
-              <li><code>#pedido 2</code>: Pide la 2ª opción del menú de hoy.</li>
-              <li><code>#pedido Pollo al horno</code>: Busca el plato por coincidencia de texto.</li>
-              <li>El bot verifica que el número sea pensionado y tenga almuerzos disponibles antes de registrarlo.</li>
-            </ul>
+
+            <div style="display: flex; flex-direction: column; gap: 0.6rem; font-size: 0.83rem; color: #334155;">
+              <!-- Pedido Simple y Múltiple -->
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;">
+                <div style="font-weight: 700; color: #0f172a; margin-bottom: 0.2rem;">
+                   <code>#pedido [platos]</code> <span style="font-size: 0.75rem; color: #16a34a; font-weight: 600;">(Realizar Pedido)</span>
+                </div>
+                <div style="color: #64748b; font-size: 0.78rem; line-height: 1.4;">
+                  • <em>Un plato:</em> <code>#pedido 1</code> o <code>#pedido saice</code><br />
+                  • <em>Múltiples platos:</em> <code>#pedido 2 chuletas, 1 saice, 3 sopas</code>
+                </div>
+              </div>
+
+              <!-- Cancelar Pedido -->
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;">
+                <div style="font-weight: 700; color: #0f172a; margin-bottom: 0.2rem;">
+                   <code>#cancelar</code> <span style="font-size: 0.75rem; color: #dc2626; font-weight: 600;">(Cancelar Pedido de Hoy)</span>
+                </div>
+                <div style="color: #64748b; font-size: 0.78rem; line-height: 1.4;">
+                  Cancela el pedido registrado para el día de hoy y <strong>devuelve automáticamente los platos</strong> al saldo de la pensión.
+                </div>
+              </div>
+
+              <!-- Consultar Saldo -->
+              <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem 0.75rem;">
+                <div style="font-weight: 700; color: #0f172a; margin-bottom: 0.2rem;">
+                   <code>#saldo</code> <span style="font-size: 0.75rem; color: #2563eb; font-weight: 600;">(Consultar Estado de Cuenta)</span>
+                </div>
+                <div style="color: #64748b; font-size: 0.78rem; line-height: 1.4;">
+                  El cliente recibe sus almuerzos disponibles y el ID de su pensión activa.
+                </div>
+              </div>
+
+              <!-- Ayuda e ID de Grupo -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem 0.65rem;">
+                  <span style="font-weight: 700; color: #0f172a;"> <code>#ayuda</code></span>: Ver lista de comandos.
+                </div>
+                <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem 0.65rem;">
+                  <span style="font-weight: 700; color: #0f172a;"> <code>#id_grupo</code></span>: Consultar ID del grupo.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

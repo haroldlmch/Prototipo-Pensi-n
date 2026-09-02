@@ -463,7 +463,17 @@ onMounted(() => {
           </div>
         </template>
 
-        <Column field="nombreCompleto" header="Nombre Completo" style="min-width: 220px; max-width: 280px; text-align: left;">
+        <Column header="#" style="width: 75px; text-align: center;">
+          <template #body="slotProps">
+            <Tag
+              :value="'#' + slotProps.data.id"
+              severity="secondary"
+              style="font-weight: 700; font-size: 0.78rem; background: #f1f5f9; color: #475569;"
+            />
+          </template>
+        </Column>
+
+        <Column field="nombreCompleto" header="Nombre Completo" style="min-width: 250px;">
           <template #body="slotProps">
             <div style="display: flex; align-items: center; gap: 0.75rem;">
               <div
@@ -483,42 +493,43 @@ onMounted(() => {
               >
                 {{ slotProps.data.nombreCompleto.charAt(0).toUpperCase() }}
               </div>
-              <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              <strong style="color: #1e293b; font-size: 0.92rem;">
                 {{ slotProps.data.nombreCompleto }}
-              </span>
+              </strong>
             </div>
           </template>
         </Column>
 
-        <Column field="telefono" header="Teléfono" style="width: 160px; text-align: center;">
+        <Column field="telefono" header="Teléfono" style="width: 180px; text-align: center;">
           <template #body="slotProps">
-            <span v-if="slotProps.data.telefono" style="display: inline-flex; align-items: center; gap: 0.35rem; color: #475569;">
+            <span v-if="slotProps.data.telefono" style="display: inline-flex; align-items: center; gap: 0.35rem; color: #475569; font-weight: 500;">
               <i class="pi pi-phone" style="font-size: 0.8rem; color: #64748b;"></i>
               <span>{{ slotProps.data.telefono }}</span>
             </span>
-            <span v-else style="color: #94a3b8; font-style: italic;">Sin teléfono</span>
+            <span v-else style="color: #94a3b8; font-style: italic; font-size: 0.85rem;">Sin teléfono</span>
           </template>
         </Column>
 
-        <Column field="estado" header="Estado" style="width: 110px; text-align: center;">
+        <Column field="estado" header="Estado" style="width: 130px; text-align: center;">
           <template #body="slotProps">
             <Tag
               :value="slotProps.data.estado ? 'Activo' : 'Inactivo'"
               :severity="slotProps.data.estado ? 'success' : 'danger'"
               rounded
+              style="font-size: 0.78rem; font-weight: 700; padding: 0.3rem 0.65rem;"
             />
           </template>
         </Column>
 
-        <Column header="Acciones y Ficha" style="width: 230px; text-align: center; white-space: nowrap;">
+        <Column header="Acciones y Ficha" style="width: 220px; text-align: center;">
           <template #body="slotProps">
-            <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; white-space: nowrap;">
+            <div style="display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem;">
               <Button
                 label="Ver Ficha"
                 icon="pi pi-address-book"
                 severity="info"
                 size="small"
-                style="padding: 0.35rem 0.65rem; font-size: 0.8rem; font-weight: 700; white-space: nowrap;"
+                style="padding: 0.35rem 0.65rem; font-size: 0.8rem; font-weight: 700;"
                 @click="verFicha360(slotProps.data)"
               />
               <Button

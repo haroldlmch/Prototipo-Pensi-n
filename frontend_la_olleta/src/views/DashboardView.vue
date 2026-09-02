@@ -403,7 +403,7 @@ onMounted(() => {
         >
           <div>
             <div style="font-size: 0.8rem; font-weight: 700; color: #9a3412; text-transform: uppercase;">
-              💰 Ganancia Directa (Casuales + Extras)
+               Ganancia Directa (Casuales + Extras)
             </div>
             <div style="font-size: 0.82rem; color: #c2410c; margin-top: 0.15rem;">
               Dinero generado por consumo directo de comida y bebidas
@@ -417,7 +417,7 @@ onMounted(() => {
         <!-- Tarjetas de desglose rápido por módulo -->
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem;">
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">🍛 Ventas Casuales</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;"> Ventas Casuales</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
               Bs. {{ formatDinero(cierre.totalVentas) }}
             </div>
@@ -425,7 +425,7 @@ onMounted(() => {
           </div>
 
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">🥤 Extras Cobrados</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;"> Extras Cobrados</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
               Bs. {{ formatDinero(cierre.totalExtras) }}
             </div>
@@ -433,7 +433,7 @@ onMounted(() => {
           </div>
 
           <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0.85rem; text-align: center;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;">💳 Abonos Pensión</div>
+            <div style="font-size: 0.75rem; color: #64748b; font-weight: 600;"> Abonos Pensión</div>
             <div style="font-size: 1.15rem; font-weight: 800; color: #1e293b; margin-top: 0.2rem;">
               Bs. {{ formatDinero(cierre.totalPagos) }}
             </div>

@@ -29,63 +29,108 @@ interface Extra {
   descripcion: string;
   precio: number | string;
   estadoPago?: string;
+  tipoCliente?: string;
+  clienteCasual?: string;
+  metodoPago?: string;
   pension?: Pension;
 }
 
 const extras = ref<Extra[]>([]);
 const pensiones = ref<Pension[]>([]);
-const busquedaPensionado = ref('');
-const estadoPago = ref('PENDIENTE');
-const estadosPago = ['PENDIENTE', 'PAGADO'];
+const busqueda = ref('');
+const filtroTipoCliente = ref<'TODOS' | 'PENSIONADO' | 'CASUAL' | 'PENDIENTES'>('TODOS');
 
-const extrasFiltrados = computed(() => {
-  if (!busquedaPensionado.value.trim()) return extras.value;
-  
-  const busqueda = busquedaPensionado.value.toLowerCase().trim();
-  
-  return extras.value.filter((extra) => {
-    const nombreCompleto = (extra.pension?.pensionado?.nombreCompleto ?? '').toLowerCase().trim();
-    return nombreCompleto.includes(busqueda);
-  });
-});
-
-const totalExtras = computed(() =>
-  extrasFiltrados.value.reduce((total, extra) => total + Number(extra.precio), 0),
-);
-
+// Formulario State
 const visible = ref(false);
 const modoEdicion = ref(false);
 const cargando = ref(false);
 const guardando = ref(false);
 const errorMensaje = ref('');
 
+const extraId = ref<number | null>(null);
+const tipoClienteForm = ref<'PENSIONADO' | 'CASUAL'>('PENSIONADO');
+const fecha = ref('');
+const descripcion = ref('');
+const precio = ref<number | null>(null);
+const idPension = ref<number | null>(null);
+const clienteCasual = ref('');
+const metodoPago = ref('Efectivo');
+const estadoPago = ref('PENDIENTE');
+
+const metodosPago = ['Efectivo', 'QR'];
+const estadosPago = ['PENDIENTE', 'PAGADO'];
+
+// Confirmación Eliminación
 const mostrarConfirmarEliminar = ref(false);
 const idAEliminar = ref<number | null>(null);
 const mensajeEliminar = ref('');
 const eliminando = ref(false);
 
-const extraId = ref<number | null>(null);
-const fecha = ref('');
-const descripcion = ref('');
-const precio = ref<number | null>(null);
-const idPension = ref<number | null>(null);
-
 const pensionesOpciones = computed(() =>
-  pensiones.value.map((pension) => ({
-    ...pension,
-    descripcion: `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} - Pensión #${pension.id}`,
-  })),
+  pensiones.value
+    .filter((p) => p.estado === 'ACTIVA' || p.id === idPension.value)
+    .map((pension) => ({
+      ...pension,
+      descripcion: `${pension.pensionado?.nombreCompleto ?? 'Sin pensionado'} (Pensión #${pension.id})`,
+    })),
 );
 
-const formularioValido = computed(
-  () =>
-    Boolean(fecha.value) &&
-    Boolean(descripcion.value.trim()) &&
-    descripcion.value.trim().length <= 200 &&
-    precio.value !== null &&
-    precio.value >= 0 &&
-    idPension.value !== null,
+const extrasFiltrados = computed(() => {
+  let list = extras.value;
+
+  // Filtro por pestaña/tipo
+  if (filtroTipoCliente.value === 'PENSIONADO') {
+    list = list.filter((e) => (e.tipoCliente || (e.pension ? 'PENSIONADO' : 'CASUAL')) === 'PENSIONADO');
+  } else if (filtroTipoCliente.value === 'CASUAL') {
+    list = list.filter((e) => (e.tipoCliente || (e.pension ? 'PENSIONADO' : 'CASUAL')) === 'CASUAL');
+  } else if (filtroTipoCliente.value === 'PENDIENTES') {
+    list = list.filter((e) => e.estadoPago === 'PENDIENTE');
+  }
+
+  // Filtro por texto
+  if (!busqueda.value.trim()) return list;
+  const q = busqueda.value.toLowerCase().trim();
+
+  return list.filter((extra) => {
+    const nombrePensionado = (extra.pension?.pensionado?.nombreCompleto ?? '').toLowerCase();
+    const nombreCasual = (extra.clienteCasual ?? '').toLowerCase();
+    const desc = (extra.descripcion ?? '').toLowerCase();
+    return nombrePensionado.includes(q) || nombreCasual.includes(q) || desc.includes(q);
+  });
+});
+
+// Resúmenes y métricas
+const totalMontoExtras = computed(() =>
+  extras.value.reduce((total, extra) => total + Number(extra.precio || 0), 0),
 );
+
+const totalExtrasPensionados = computed(() =>
+  extras.value
+    .filter((e) => (e.tipoCliente || (e.pension ? 'PENSIONADO' : 'CASUAL')) === 'PENSIONADO')
+    .reduce((total, extra) => total + Number(extra.precio || 0), 0),
+);
+
+const totalExtrasCasuales = computed(() =>
+  extras.value
+    .filter((e) => (e.tipoCliente || (e.pension ? 'PENSIONADO' : 'CASUAL')) === 'CASUAL')
+    .reduce((total, extra) => total + Number(extra.precio || 0), 0),
+);
+
+const totalPendientesCobro = computed(() =>
+  extras.value
+    .filter((e) => e.estadoPago === 'PENDIENTE')
+    .reduce((total, extra) => total + Number(extra.precio || 0), 0),
+);
+
+const formularioValido = computed(() => {
+  if (!fecha.value || !descripcion.value.trim() || precio.value === null || precio.value < 0) {
+    return false;
+  }
+  if (tipoClienteForm.value === 'PENSIONADO') {
+    return idPension.value !== null;
+  }
+  return true;
+});
 
 const obtenerMensajeError = (error: unknown) => {
   const posibleError = error as {
@@ -128,10 +173,13 @@ const cargarDatos = async () => {
 
 const limpiarFormulario = () => {
   extraId.value = null;
+  tipoClienteForm.value = 'PENSIONADO';
   fecha.value = obtenerFechaLocal();
   descripcion.value = '';
   precio.value = null;
   idPension.value = null;
+  clienteCasual.value = '';
+  metodoPago.value = 'Efectivo';
   estadoPago.value = 'PENDIENTE';
   modoEdicion.value = false;
   errorMensaje.value = '';
@@ -142,13 +190,31 @@ const nuevoExtra = () => {
   visible.value = true;
 };
 
+const cambiarTipoCliente = (tipo: 'PENSIONADO' | 'CASUAL') => {
+  tipoClienteForm.value = tipo;
+  if (tipo === 'CASUAL') {
+    estadoPago.value = 'PAGADO';
+    if (!clienteCasual.value) {
+      clienteCasual.value = 'Cliente Casual';
+    }
+  } else {
+    estadoPago.value = 'PENDIENTE';
+  }
+};
+
 const editarExtra = (extra: Extra) => {
   extraId.value = extra.id;
   fecha.value = extra.fecha.slice(0, 10);
   descripcion.value = extra.descripcion;
   precio.value = Number(extra.precio);
   idPension.value = extra.pension?.id ?? null;
+  clienteCasual.value = extra.clienteCasual || '';
+  metodoPago.value = extra.metodoPago || 'Efectivo';
   estadoPago.value = extra.estadoPago || 'PENDIENTE';
+
+  const esPensionado = Boolean(extra.pension) || extra.tipoCliente === 'PENSIONADO';
+  tipoClienteForm.value = esPensionado ? 'PENSIONADO' : 'CASUAL';
+
   modoEdicion.value = true;
   errorMensaje.value = '';
   visible.value = true;
@@ -177,12 +243,15 @@ const guardarExtra = async () => {
     fecha: convertirFechaISO(fecha.value),
     descripcion: descripcion.value.trim(),
     precio: Number(precio.value),
-    idPension: Number(idPension.value),
+    tipoCliente: tipoClienteForm.value,
+    idPension: tipoClienteForm.value === 'PENSIONADO' ? Number(idPension.value) : undefined,
+    clienteCasual: tipoClienteForm.value === 'CASUAL' ? (clienteCasual.value.trim() || 'Cliente Casual') : undefined,
+    metodoPago: tipoClienteForm.value === 'CASUAL' ? metodoPago.value : undefined,
     estadoPago: estadoPago.value,
   };
 
   try {
-    if (modoEdicion.value) {
+    if (modoEdicion.value && extraId.value) {
       await api.patch(`/extras/${extraId.value}`, payload);
     } else {
       await api.post('/extras', payload);
@@ -200,7 +269,7 @@ const guardarExtra = async () => {
 
 const eliminarExtra = async (id: number) => {
   idAEliminar.value = id;
-  mensajeEliminar.value = '¿Desea eliminar este extra? Esta acción no se puede deshacer.';
+  mensajeEliminar.value = '¿Desea eliminar este consumo extra? Esta acción no se puede deshacer.';
   mostrarConfirmarEliminar.value = true;
 };
 
@@ -235,11 +304,16 @@ const formatearMonto = (monto: number | string) =>
     currency: 'BOB',
   }).format(Number(monto));
 
-const obtenerNombrePensionado = (extra: Extra) =>
-  extra.pension?.pensionado?.nombreCompleto ??
-  pensiones.value.find((pension) => pension.id === extra.pension?.id)
-    ?.pensionado?.nombreCompleto ??
-  'No disponible';
+const obtenerNombreCliente = (extra: Extra) => {
+  if (extra.tipoCliente === 'CASUAL' || !extra.pension) {
+    return extra.clienteCasual || 'Cliente Casual';
+  }
+  return (
+    extra.pension?.pensionado?.nombreCompleto ??
+    pensiones.value.find((p) => p.id === extra.pension?.id)?.pensionado?.nombreCompleto ??
+    'Pensionado'
+  );
+};
 
 onMounted(cargarDatos);
 </script>
@@ -250,10 +324,10 @@ onMounted(cargarDatos);
     <div style="display: flex; justify-content: space-between; align-items: center;">
       <div>
         <h1 style="margin: 0; font-size: 2rem; font-weight: 800; color: #0f172a; letter-spacing: -0.025em;">
-          Extras
+          Consumos Extras
         </h1>
         <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.95rem; font-weight: 500;">
-          Consumos adicionales solicitados por los clientes (refrescos, postres, extras).
+          Registro de adicionales para pensionados (a cuenta de pensión) y clientes casuales (mostrador).
         </p>
       </div>
 
@@ -269,29 +343,120 @@ onMounted(cargarDatos);
       v-if="errorMensaje && !visible"
       severity="error"
       :closable="false"
-      class="mensaje"
     >
       {{ errorMensaje }}
     </Message>
 
-    <!-- Buscador -->
+    <!-- Tarjetas de Resumen -->
+    <div class="metricas-grid">
+      <!-- Total General -->
+      <div class="tarjeta-metrica">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="metrica-label">Total Extras Registrados</span>
+          <div style="background: #ffedd5; color: #ea580c; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-shopping-bag" style="font-size: 1.1rem;"></i>
+          </div>
+        </div>
+        <h3 class="metrica-valor" style="color: #ea580c;">{{ formatearMonto(totalMontoExtras) }}</h3>
+        <span style="font-size: 0.78rem; color: #78716c;">{{ extras.length }} consumo(s) en total</span>
+      </div>
+
+      <!-- Extras Pensionados -->
+      <div class="tarjeta-metrica">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="metrica-label">De Pensionados</span>
+          <div style="background: #dbeafe; color: #2563eb; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-user" style="font-size: 1.1rem;"></i>
+          </div>
+        </div>
+        <h3 class="metrica-valor" style="color: #1e40af;">{{ formatearMonto(totalExtrasPensionados) }}</h3>
+        <span style="font-size: 0.78rem; color: #64748b;">Anotados a cuenta de plan</span>
+      </div>
+
+      <!-- Extras Casuales -->
+      <div class="tarjeta-metrica">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="metrica-label">De Clientes Casuales</span>
+          <div style="background: #dcfce7; color: #16a34a; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-users" style="font-size: 1.1rem;"></i>
+          </div>
+        </div>
+        <h3 class="metrica-valor" style="color: #15803d;">{{ formatearMonto(totalExtrasCasuales) }}</h3>
+        <span style="font-size: 0.78rem; color: #16a34a;">Venta directa en mostrador</span>
+      </div>
+
+      <!-- Pendientes por Cobrar -->
+      <div class="tarjeta-metrica">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span class="metrica-label">Pendientes de Cobro</span>
+          <div style="background: #fee2e2; color: #dc2626; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+            <i class="pi pi-clock" style="font-size: 1.1rem;"></i>
+          </div>
+        </div>
+        <h3 class="metrica-valor" style="color: #dc2626;">{{ formatearMonto(totalPendientesCobro) }}</h3>
+        <span style="font-size: 0.78rem; color: #b91c1c;">Por liquidar</span>
+      </div>
+    </div>
+
+    <!-- Buscador y Filtros -->
     <div
       style="
         background: white;
         border-radius: 16px;
         border: 1px solid #fed7aa;
-        padding: 1.5rem;
+        padding: 1.25rem 1.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
       "
     >
-      <div style="display: flex; align-items: center; gap: 0.75rem;">
-        <i class="pi pi-search" style="color: #94a3b8;"></i>
-        <InputText
-          v-model="busquedaPensionado"
-          placeholder="Buscar por nombre de pensionado..."
-          style="padding: 0.75rem 1rem; flex: 1;"
-          fluid
-        />
+      <div style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex: 1; min-width: 250px;">
+          <i class="pi pi-search" style="color: #94a3b8;"></i>
+          <InputText
+            v-model="busqueda"
+            placeholder="Buscar por pensionado, cliente casual o producto..."
+            style="padding: 0.75rem 1rem; flex: 1;"
+            fluid
+          />
+        </div>
+
+        <!-- Filtros Rápidos -->
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button
+            type="button"
+            class="boton-filtro"
+            :class="{ activo: filtroTipoCliente === 'TODOS' }"
+            @click="filtroTipoCliente = 'TODOS'"
+          >
+            Todos ({{ extras.length }})
+          </button>
+          <button
+            type="button"
+            class="boton-filtro"
+            :class="{ activo: filtroTipoCliente === 'PENSIONADO' }"
+            @click="filtroTipoCliente = 'PENSIONADO'"
+          >
+            👤 Pensionados
+          </button>
+          <button
+            type="button"
+            class="boton-filtro"
+            :class="{ activo: filtroTipoCliente === 'CASUAL' }"
+            @click="filtroTipoCliente = 'CASUAL'"
+          >
+            🚶 Casuales
+          </button>
+          <button
+            type="button"
+            class="boton-filtro"
+            :class="{ activo: filtroTipoCliente === 'PENDIENTES' }"
+            @click="filtroTipoCliente = 'PENDIENTES'"
+          >
+            ⏳ Pendientes
+          </button>
+        </div>
       </div>
     </div>
 
@@ -311,26 +476,55 @@ onMounted(cargarDatos);
         paginator
         :rows="10"
         dataKey="id"
-        emptyMessage="No hay extras registrados"
+        emptyMessage="No hay consumos extras registrados"
         responsiveLayout="scroll"
         class="p-datatable-sm"
       >
-
-        <Column header="Pensionado" style="font-weight: 600; color: #334155;">
+        <!-- Columna 1: Tipo de Cliente -->
+        <Column header="Tipo" style="width: 140px;">
           <template #body="slotProps">
-            {{ obtenerNombrePensionado(slotProps.data) }}
+            <Tag
+              v-if="(slotProps.data.tipoCliente || (slotProps.data.pension ? 'PENSIONADO' : 'CASUAL')) === 'PENSIONADO'"
+              value="Pensionado"
+              severity="info"
+              icon="pi pi-user"
+              style="font-size: 0.75rem; font-weight: 700; padding: 0.3rem 0.6rem;"
+            />
+            <Tag
+              v-else
+              value="Casual"
+              severity="success"
+              icon="pi pi-users"
+              style="font-size: 0.75rem; font-weight: 700; padding: 0.3rem 0.6rem;"
+            />
           </template>
         </Column>
 
-        <Column header="Pensión" style="width: 140px;">
+        <!-- Columna 2: Cliente / Destinatario -->
+        <Column header="Cliente / Destinatario" style="min-width: 200px;">
           <template #body="slotProps">
-            <span style="font-weight: 700; color: #475569;">
-              Pensión #{{ slotProps.data.pension?.id ?? '-' }}
-            </span>
+            <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+              <strong style="color: #1e293b; font-size: 0.92rem;">
+                {{ obtenerNombreCliente(slotProps.data) }}
+              </strong>
+
+              <span
+                v-if="slotProps.data.pension"
+                style="font-size: 0.78rem; color: #64748b;"
+              >
+                Cuenta de Pensión #{{ slotProps.data.pension.id }}
+              </span>
+              <span
+                v-else-if="slotProps.data.metodoPago"
+                style="font-size: 0.78rem; color: #059669; font-weight: 600;"
+              >
+                Pago: {{ slotProps.data.metodoPago }}
+              </span>
+            </div>
           </template>
         </Column>
 
-        <Column header="Fecha" style="color: #475569; width: 140px;">
+        <Column header="Fecha" style="color: #475569; width: 130px;">
           <template #body="slotProps">
             {{ formatearFecha(slotProps.data.fecha) }}
           </template>
@@ -339,12 +533,12 @@ onMounted(cargarDatos);
         <Column
           field="descripcion"
           header="Descripción del Extra"
-          style="color: #334155; font-weight: 500;"
+          style="color: #334155; font-weight: 500; min-width: 200px;"
         />
 
         <Column header="Precio" style="width: 130px; text-align: right;">
           <template #body="slotProps">
-            <span style="font-weight: 800; color: #b45309;">
+            <span style="font-weight: 800; color: #b45309; font-size: 0.95rem;">
               {{ formatearMonto(slotProps.data.precio) }}
             </span>
           </template>
@@ -358,14 +552,14 @@ onMounted(cargarDatos);
               :icon="(slotProps.data.estadoPago || '') === 'PAGADO' ? 'pi pi-check' : 'pi pi-clock'"
               size="small"
               rounded
-              title="Clic para cambiar estado de pago"
+              title="Clic para alternar estado de pago"
               style="padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 700;"
               @click="alternarEstadoPago(slotProps.data)"
             />
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 140px; text-align: center;">
+        <Column header="Acciones" style="width: 120px; text-align: center;">
           <template #body="slotProps">
             <Button
               icon="pi pi-pencil"
@@ -394,8 +588,8 @@ onMounted(cargarDatos);
     <Dialog
       v-model:visible="visible"
       modal
-      :header="modoEdicion ? 'Editar Extra' : 'Nuevo Extra'"
-      :style="{ width: '480px' }"
+      :header="modoEdicion ? 'Editar Consumo Extra' : 'Nuevo Consumo Extra'"
+      :style="{ width: '520px' }"
     >
       <div class="formulario">
         <Message
@@ -407,21 +601,68 @@ onMounted(cargarDatos);
           {{ errorMensaje }}
         </Message>
 
+        <!-- Selector Tipo de Cliente -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensión del Cliente</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Tipo de Cliente *</label>
+          <div style="display: flex; gap: 0.5rem; background: #f1f5f9; padding: 0.35rem; border-radius: 12px;">
+            <button
+              type="button"
+              :style="tipoClienteForm === 'PENSIONADO' ? 'background: #f97316; color: white; font-weight: 700; box-shadow: 0 2px 6px rgba(249,115,22,0.3);' : 'background: transparent; color: #64748b; font-weight: 600;'"
+              style="flex: 1; border: none; padding: 0.65rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 0.88rem;"
+              @click="cambiarTipoCliente('PENSIONADO')"
+            >
+              <i class="pi pi-user" style="margin-right: 0.4rem;"></i> Pensionado
+            </button>
+            <button
+              type="button"
+              :style="tipoClienteForm === 'CASUAL' ? 'background: #f97316; color: white; font-weight: 700; box-shadow: 0 2px 6px rgba(249,115,22,0.3);' : 'background: transparent; color: #64748b; font-weight: 600;'"
+              style="flex: 1; border: none; padding: 0.65rem; border-radius: 8px; cursor: pointer; transition: all 0.2s; font-size: 0.88rem;"
+              @click="cambiarTipoCliente('CASUAL')"
+            >
+              <i class="pi pi-users" style="margin-right: 0.4rem;"></i> Cliente Casual
+            </button>
+          </div>
+        </div>
+
+        <!-- Si es Pensionado: Seleccionar Pensión -->
+        <div v-if="tipoClienteForm === 'PENSIONADO'" style="display: flex; flex-direction: column; gap: 0.4rem;">
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Pensión del Cliente *</label>
           <Select
             v-model="idPension"
             :options="pensionesOpciones"
             optionLabel="descripcion"
             optionValue="id"
-            placeholder="Seleccione la pensión asociada"
+            placeholder="Seleccione el pensionado..."
             fluid
           />
         </div>
 
+        <!-- Si es Casual: Nombre / Referencia y Método de Pago -->
+        <div v-if="tipoClienteForm === 'CASUAL'" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Nombre / Referencia</label>
+            <InputText
+              v-model="clienteCasual"
+              placeholder="Ej. Mesa 3, Mostrador, Juan"
+              style="padding: 0.75rem 1rem;"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Método de Pago</label>
+            <Select
+              v-model="metodoPago"
+              :options="metodosPago"
+              fluid
+            />
+          </div>
+        </div>
+
+        <!-- Fecha y Estado de Pago -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Fecha</label>
             <input
               v-model="fecha"
               type="date"
@@ -430,7 +671,7 @@ onMounted(cargarDatos);
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Estado de Pago</label>
+            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Estado de Pago</label>
             <Select
               v-model="estadoPago"
               :options="estadosPago"
@@ -439,12 +680,13 @@ onMounted(cargarDatos);
           </div>
         </div>
 
+        <!-- Descripción -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Descripción</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Descripción del Extra *</label>
           <InputText
             v-model="descripcion"
             maxlength="200"
-            placeholder="Ej. Bebida gaseosa, porción extra de carne, postre"
+            placeholder="Ej. Refresco, porción extra de carne, postre"
             style="padding: 0.75rem 1rem;"
             fluid
           />
@@ -453,22 +695,24 @@ onMounted(cargarDatos);
           </span>
         </div>
 
+        <!-- Precio -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Precio</label>
+          <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Precio (Bs.) *</label>
           <InputNumber
             v-model="precio"
             mode="currency"
             currency="BOB"
             locale="es-BO"
             :min="0"
+            placeholder="0.00 Bs."
             fluid
           />
         </div>
 
         <Button
-          label="Guardar Consumo Extra"
-          icon="pi pi-save"
-          style="margin-top: 0.5rem; padding: 0.75rem;"
+          :label="modoEdicion ? 'Guardar Cambios' : 'Registrar Consumo Extra'"
+          :icon="modoEdicion ? 'pi pi-save' : 'pi pi-check'"
+          style="margin-top: 0.5rem; padding: 0.75rem; background: #f97316; border-color: #f97316; color: white; font-weight: 700;"
           :loading="guardando"
           :disabled="!formularioValido"
           fluid
@@ -519,19 +763,66 @@ onMounted(cargarDatos);
 </template>
 
 <style scoped>
-.encabezado {
+.metricas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.25rem;
+}
+
+.tarjeta-metrica {
+  background: white;
+  border-radius: 16px;
+  border: 1px solid #fed7aa;
+  padding: 1.25rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.metrica-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.metrica-valor {
+  margin: 0.35rem 0 0.15rem 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.boton-filtro {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.boton-filtro:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.boton-filtro.activo {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: white;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.25);
 }
 
 .formulario {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.15rem;
   padding-top: 0.5rem;
 }
 
@@ -549,6 +840,6 @@ onMounted(cargarDatos);
 }
 
 .input-fecha-custom:focus {
-  border-color: #3b82f6;
+  border-color: #f97316;
 }
 </style>

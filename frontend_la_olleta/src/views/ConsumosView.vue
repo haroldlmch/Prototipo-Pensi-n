@@ -113,7 +113,6 @@ const busquedaFecha = ref<Date | null>(null);
 const tiposConsumo = [
   'Almuerzo en Comedor',
   'Para llevar / Vianda',
-  'Entrega / Delivery',
 ];
 
 const pensionesActivas = computed(() => {
@@ -775,6 +774,13 @@ onMounted(() => {
               value="Comedor"
               severity="warn"
               icon="pi pi-home"
+              style="font-weight: 700; font-size: 0.8rem;"
+            />
+            <Tag
+              v-else-if="slotProps.data.tipoConsumo === 'Para llevar / Vianda'"
+              value="Para llevar"
+              severity="info"
+              icon="pi pi-box"
               style="font-weight: 700; font-size: 0.8rem;"
             />
             <Tag

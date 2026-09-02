@@ -1,9 +1,16 @@
-import { Pensione } from "src/pensiones/entities/pensione.entity";
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import { Pensione } from 'src/pensiones/entities/pensione.entity';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 
 @Entity('extras')
 export class Extra {
-    @PrimaryGeneratedColumn('identity')
+  @PrimaryGeneratedColumn('identity')
   id!: number;
 
   @Column('date', {
@@ -31,18 +38,36 @@ export class Extra {
   })
   estadoPago!: string;
 
-  @ManyToOne(
-    () => Pensione,
-    (pension) => pension.extras,
-    {
-      nullable: false,
-      onDelete: 'CASCADE',
-    },
-  )
+  @Column('varchar', {
+    name: 'tipo_cliente',
+    length: 30,
+    default: 'PENSIONADO',
+  })
+  tipoCliente!: string;
+
+  @Column('varchar', {
+    name: 'cliente_casual',
+    length: 150,
+    nullable: true,
+  })
+  clienteCasual?: string;
+
+  @Column('varchar', {
+    name: 'metodo_pago',
+    length: 30,
+    nullable: true,
+    default: 'Efectivo',
+  })
+  metodoPago?: string;
+
+  @ManyToOne(() => Pensione, (pension) => pension.extras, {
+    nullable: true,
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({
     name: 'id_pension',
   })
-  pension!: Pensione;
+  pension?: Pensione | null;
 
   @CreateDateColumn({
     name: 'fecha_creacion',

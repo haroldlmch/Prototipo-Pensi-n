@@ -94,7 +94,7 @@ const actualizarDisponibles = () => {
   if (modoEdicion.value) return;
   const comprados = Number(cantidadCompletos.value) || 0;
   const extra = (traspasarSaldo.value && saldoRestanteAnterior.value > 0) ? Number(saldoRestanteAnterior.value) : 0;
-  completosDisponibles.value = String(comprados + extra);
+  completosDisponibles.value = (comprados + extra > 0) ? String(comprados + extra) : '';
 };
 
 const cargarPensiones = async () => {
@@ -138,8 +138,8 @@ const limpiarFormulario = () => {
   pensionId.value = null;
 
   fechaInicio.value = obtenerFechaLocal();
-  cantidadCompletos.value = '8';
-  completosDisponibles.value = '8';
+  cantidadCompletos.value = '';
+  completosDisponibles.value = '';
   estado.value = 'ACTIVA';
   idPensionado.value = null;
   idPensionAnterior.value = null;
@@ -160,7 +160,7 @@ const renovarPension = (pension: any) => {
   saldoRestanteAnterior.value = Number(pension.completosDisponibles) || 0;
   idPensionado.value = Number(pension.pensionado?.id || pension.idPensionado);
   fechaInicio.value = obtenerFechaLocal();
-  cantidadCompletos.value = '8';
+  cantidadCompletos.value = '';
   traspasarSaldo.value = true;
   actualizarDisponibles();
   visible.value = true;
@@ -861,11 +861,11 @@ onMounted(async () => {
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; width: 100%; box-sizing: border-box;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem; min-width: 0;">
             <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">
-              {{ modoEdicion ? 'Total de Platos' : (idPensionAnterior ? 'Cantidad de Platos a Renovar *' : 'Cantidad de Platos a Adquirir *') }}
+              {{ modoEdicion ? 'Total de Completos' : (idPensionAnterior ? 'Completos a Renovar *' : 'Completos a Adquirir *') }}
             </label>
             <InputText
               v-model="cantidadCompletos"
-              placeholder="Ej. 7"
+              placeholder="Ej. 15"
               maxlength="5"
               fluid
               style="padding: 0.75rem 1rem; width: 100%; box-sizing: border-box;"
@@ -876,7 +876,7 @@ onMounted(async () => {
             <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Total Disponibles</label>
             <InputText
               v-model="completosDisponibles"
-              placeholder="Ej. 8"
+              placeholder="Saldo total"
               maxlength="5"
               fluid
               style="padding: 0.75rem 1rem; font-weight: 800; color: #059669; background: #f8fafc; width: 100%; box-sizing: border-box;"

@@ -510,10 +510,10 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Platos Pagados" style="width: 140px; text-align: center;">
+        <Column header="Completos Pagados" style="width: 150px; text-align: center;">
           <template #body="slotProps">
             <span style="font-weight: 700; color: #2563eb;">
-              {{ obtenerPlatosPagados(slotProps.data) }} platos
+              {{ obtenerPlatosPagados(slotProps.data) }} completos
             </span>
           </template>
         </Column>

@@ -813,8 +813,8 @@ onMounted(cargarVentas);
                 />
               </div>
 
-              <!-- Selector de Cantidad Cómodo y Visible -->
-              <div style="width: 125px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+              <!-- Selector de Cantidad Cómodo, Escribible y con botones -->
+              <div style="width: 135px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
                 <Button
                   icon="pi pi-minus"
                   severity="secondary"
@@ -823,11 +823,15 @@ onMounted(cargarVentas);
                   size="small"
                   style="width: 26px; height: 26px; padding: 0;"
                   :disabled="item.cantidad <= 1"
-                  @click="item.cantidad = Math.max(1, item.cantidad - 1)"
+                  @click="item.cantidad = Math.max(1, (Number(item.cantidad) || 1) - 1)"
                 />
-                <span style="font-weight: 800; font-size: 1.05rem; color: #1e293b; min-width: 24px; text-align: center;">
-                  {{ item.cantidad }}
-                </span>
+                <input
+                  v-model.number="item.cantidad"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  style="width: 50px; text-align: center; font-weight: 800; font-size: 1.05rem; color: #1e293b; border: none; outline: none; background: transparent;"
+                />
                 <Button
                   icon="pi pi-plus"
                   severity="secondary"
@@ -835,8 +839,8 @@ onMounted(cargarVentas);
                   rounded
                   size="small"
                   style="width: 26px; height: 26px; padding: 0;"
-                  :disabled="item.cantidad >= 10"
-                  @click="item.cantidad = Math.min(10, item.cantidad + 1)"
+                  :disabled="item.cantidad >= 999"
+                  @click="item.cantidad = Math.min(999, (Number(item.cantidad) || 0) + 1)"
                 />
               </div>
 

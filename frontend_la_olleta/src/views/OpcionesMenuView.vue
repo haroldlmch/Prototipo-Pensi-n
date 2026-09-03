@@ -45,11 +45,14 @@ const cargarMenus = async () => {
   }
 };
 
+const errorMensaje = ref('');
+
 const limpiarFormulario = () => {
   opcionId.value = null;
   nombreSegundo.value = '';
   menuFecha.value = null;
   modoEdicion.value = false;
+  errorMensaje.value = '';
 };
 
 const nuevoRegistro = () => {
@@ -62,11 +65,31 @@ const editarRegistro = (opcion: any) => {
   nombreSegundo.value = opcion.nombreSegundo;
   menuFecha.value = opcion.menu?.fecha ? new Date(opcion.menu.fecha) : null;
   modoEdicion.value = true;
+  errorMensaje.value = '';
   visible.value = true;
 };
 
 const guardarRegistro = async () => {
+  const nombre = nombreSegundo.value.trim();
+  if (!nombre) {
+    errorMensaje.value = 'El nombre del plato principal es obligatorio.';
+    return;
+  }
+  if (nombre.length < 2) {
+    errorMensaje.value = 'El nombre del plato debe tener al menos 2 caracteres.';
+    return;
+  }
+  if (nombre.length > 150) {
+    errorMensaje.value = 'El nombre del plato no puede superar los 150 caracteres.';
+    return;
+  }
+  if (!menuFecha.value) {
+    errorMensaje.value = 'Debe seleccionar la fecha del menú asociado.';
+    return;
+  }
+
   try {
+    errorMensaje.value = '';
     // Buscar menú con la fecha seleccionada
     const menuEncontrado = menus.value.find((m) => {
       const fechaMenu = new Date(m.fecha).toISOString().slice(0, 10);
@@ -75,12 +98,12 @@ const guardarRegistro = async () => {
     });
 
     if (!menuEncontrado) {
-      console.error('No se encontró menú para la fecha seleccionada');
+      errorMensaje.value = 'No se encontró un menú registrado para la fecha seleccionada.';
       return;
     }
 
     const payload = {
-      nombreSegundo: nombreSegundo.value,
+      nombreSegundo: nombre,
       idMenu: menuEncontrado.id,
     };
 
@@ -99,8 +122,10 @@ const guardarRegistro = async () => {
     visible.value = false;
     limpiarFormulario();
     await cargarOpciones();
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
+    const msg = error.response?.data?.message;
+    errorMensaje.value = Array.isArray(msg) ? msg.join('. ') : (msg || 'Error al guardar la opción de menú.');
   }
 };
 
@@ -312,11 +337,16 @@ onMounted(async () => {
           padding-top: 0.5rem;
         "
       >
+        <Message v-if="errorMensaje" severity="error" :closable="false">
+          {{ errorMensaje }}
+        </Message>
+
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Plato Principal (Segundo)</label>
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Plato Principal (Segundo) *</label>
           <InputText
             v-model="nombreSegundo"
             placeholder="Ingrese el nombre del segundo"
+            maxlength="150"
             style="padding: 0.75rem 1rem;"
             fluid
           />

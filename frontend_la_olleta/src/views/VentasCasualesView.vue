@@ -17,6 +17,7 @@ interface VentaCasual {
   id: number;
   fecha: string;
   cantidadCompletos: number;
+  tipoPlato?: string;
   precioUnitario: number | string;
   montoTotal: number | string;
   metodoPago?: string;
@@ -31,6 +32,9 @@ const todasLasOpciones = ref<{ id: number; nombreSegundo: string }[]>([]);
 const busquedaFecha = ref<Date | null>(null);
 const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
+
+type TipoPlato = 'Completo' | 'Solo Segundo' | 'Solo Sopa';
+const tiposPlato: TipoPlato[] = ['Completo', 'Solo Segundo', 'Solo Sopa'];
 
 const obtenerFechaLocal = () => {
   const d = new Date();
@@ -66,12 +70,14 @@ const eliminando = ref(false);
 const ventaId = ref<number | null>(null);
 const fecha = ref('');
 const idOpcionMenu = ref<number | null>(null);
+const tipoPlatoForm = ref<TipoPlato>('Completo');
 const cantidadCompletos = ref<number | null>(1);
 const precioUnitario = ref<number | null>(null);
 const montoTotal = ref<number | null>(null);
 
 interface ItemPlatoVenta {
   idOpcionMenu: number | null;
+  tipoPlato: TipoPlato;
   cantidad: number;
 }
 
@@ -82,6 +88,7 @@ const agregarPlatoVenta = () => {
     todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
   platosVentaForm.value.push({
     idOpcionMenu: defaultId,
+    tipoPlato: 'Completo',
     cantidad: 1,
   });
 };
@@ -174,11 +181,12 @@ const limpiarFormulario = () => {
   fecha.value = obtenerFechaLocal();
   const defaultId = todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
   idOpcionMenu.value = defaultId;
+  tipoPlatoForm.value = 'Completo';
   cantidadCompletos.value = 1;
   precioUnitario.value = precioCasualSugerido.value || 18;
   montoTotal.value = null;
   metodoPago.value = 'Efectivo';
-  platosVentaForm.value = [{ idOpcionMenu: defaultId, cantidad: 1 }];
+  platosVentaForm.value = [{ idOpcionMenu: defaultId, tipoPlato: 'Completo', cantidad: 1 }];
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
@@ -195,6 +203,7 @@ const editarVenta = (venta: VentaCasual) => {
   ventaId.value = venta.id;
   fecha.value = venta.fecha.slice(0, 10);
   idOpcionMenu.value = venta.opcionMenu?.id || null;
+  tipoPlatoForm.value = (venta.tipoPlato as any) || 'Completo';
   cantidadCompletos.value = venta.cantidadCompletos;
   precioUnitario.value = Number(venta.precioUnitario);
   montoTotal.value = Number(venta.montoTotal);
@@ -206,7 +215,11 @@ const editarVenta = (venta: VentaCasual) => {
 
 const guardarVenta = async () => {
   if (modoEdicion.value) {
-    if (!idOpcionMenu.value || !cantidadCompletos.value || !precioUnitario.value) {
+    if (tipoPlatoForm.value !== 'Solo Sopa' && !idOpcionMenu.value) {
+      errorMensaje.value = 'Seleccione el plato fuerte / opción requerida.';
+      return;
+    }
+    if (!cantidadCompletos.value || !precioUnitario.value) {
       errorMensaje.value = 'Complete todos los campos requeridos.';
       return;
     }
@@ -216,7 +229,8 @@ const guardarVenta = async () => {
 
     const payload = {
       fecha: convertirFechaISO(fecha.value),
-      idOpcionMenu: idOpcionMenu.value,
+      idOpcionMenu: tipoPlatoForm.value === 'Solo Sopa' ? undefined : idOpcionMenu.value,
+      tipoPlato: tipoPlatoForm.value,
       cantidadCompletos: Number(cantidadCompletos.value),
       precioUnitario: Number(precioUnitario.value),
       montoTotal: Number(cantidadCompletos.value) * Number(precioUnitario.value),
@@ -244,7 +258,8 @@ const guardarVenta = async () => {
 
     for (let i = 0; i < platosVentaForm.value.length; i++) {
       const item = platosVentaForm.value[i];
-      if (!item || !item.idOpcionMenu) {
+      if (!item) continue;
+      if (item.tipoPlato !== 'Solo Sopa' && !item.idOpcionMenu) {
         errorMensaje.value = `Seleccione el plato en la fila #${i + 1}.`;
         return;
       }
@@ -263,7 +278,8 @@ const guardarVenta = async () => {
       for (const item of platosVentaForm.value) {
         await api.post('/ventas-casuales', {
           fecha: convertirFechaISO(fecha.value),
-          idOpcionMenu: item.idOpcionMenu,
+          idOpcionMenu: item.tipoPlato === 'Solo Sopa' ? undefined : item.idOpcionMenu,
+          tipoPlato: item.tipoPlato || 'Completo',
           cantidadCompletos: Number(item.cantidad),
           precioUnitario: precio,
           montoTotal: Number(item.cantidad) * precio,
@@ -426,7 +442,14 @@ onMounted(cargarVentas);
 
         <Column header="Plato / Segundo" style="color: #334155; font-weight: 600;">
           <template #body="slotProps">
+            <span
+              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              style="color: #64748b; font-style: italic; font-weight: 600; font-size: 0.85rem;"
+            >
+              — (Sin segundo)
+            </span>
             <Tag
+              v-else
               :value="slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo del Día'"
               severity="info"
               rounded
@@ -434,10 +457,38 @@ onMounted(cargarVentas);
           </template>
         </Column>
 
+        <Column header="Tipo" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <Tag
+              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              value="Solo Sopa"
+              rounded
+              icon="pi pi-sparkles"
+              style="font-size: 0.78rem; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;"
+            />
+            <Tag
+              v-else-if="slotProps.data.tipoPlato === 'Solo Segundo'"
+              value="Solo Segundo"
+              severity="warn"
+              icon="pi pi-minus-circle"
+              rounded
+              style="font-size: 0.78rem; font-weight: 700;"
+            />
+            <Tag
+              v-else
+              value="Completo"
+              severity="success"
+              icon="pi pi-check-circle"
+              rounded
+              style="font-size: 0.78rem; font-weight: 700;"
+            />
+          </template>
+        </Column>
+
         <Column
           field="cantidadCompletos"
-          header="Completos Vendidos"
-          style="width: 150px; text-align: center; font-weight: 700; color: #0f172a;"
+          header="Cantidad"
+          style="width: 120px; text-align: center; font-weight: 700; color: #0f172a;"
         />
 
         <Column header="Precio Unitario" style="width: 150px; text-align: right;">
@@ -500,7 +551,7 @@ onMounted(cargarVentas);
       v-model:visible="visible"
       modal
       :header="modoEdicion ? 'Editar Venta Casual' : 'Nueva Venta Casual / Múltiples Platos'"
-      :style="{ width: '640px' }"
+      :style="{ width: '680px' }"
     >
       <div class="formulario">
         <Message
@@ -549,21 +600,51 @@ onMounted(cargarVentas);
 
         <!-- Modo Edición: Formulario Simple -->
         <div v-if="modoEdicion" style="display: flex; flex-direction: column; gap: 1rem;">
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo *</label>
-            <Select
-              v-model="idOpcionMenu"
-              :options="todasLasOpciones"
-              optionLabel="nombreSegundo"
-              optionValue="id"
-              placeholder="Seleccione el plato del día..."
-              fluid
-            />
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo</label>
+              <Select
+                v-if="tipoPlatoForm !== 'Solo Sopa'"
+                v-model="idOpcionMenu"
+                :options="todasLasOpciones"
+                optionLabel="nombreSegundo"
+                optionValue="id"
+                placeholder="Seleccione el plato del día..."
+                fluid
+              />
+              <div
+                v-else
+                style="
+                  padding: 0.65rem 0.85rem;
+                  background: #f0f9ff;
+                  border: 1px dashed #7dd3fc;
+                  border-radius: 8px;
+                  color: #0369a1;
+                  font-size: 0.85rem;
+                  font-weight: 700;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.4rem;
+                "
+              >
+                <i class="pi pi-sparkles"></i>
+                <span>Sopa del Día (Sin segundo)</span>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Tipo de Plato</label>
+              <Select
+                v-model="tipoPlatoForm"
+                :options="tiposPlato"
+                fluid
+              />
+            </div>
           </div>
 
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
             <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Cantidad de Completos</label>
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Cantidad</label>
               <InputNumber
                 v-model="cantidadCompletos"
                 :min="1"
@@ -586,14 +667,14 @@ onMounted(cargarVentas);
           </div>
         </div>
 
-        <!-- Modo Creación: Múltiples Segundos con Cantidad -->
+        <!-- Modo Creación: Múltiples Segundos con Cantidad y Tipo -->
         <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-weight: 800; color: #1e293b; font-size: 0.9rem;">
               🍛 Platos Fuertes / Segundos a Vender
             </label>
             <Button
-              label="Agregar otro segundo"
+              label="Agregar otro plato"
               icon="pi pi-plus"
               size="small"
               severity="secondary"
@@ -605,8 +686,9 @@ onMounted(cargarVentas);
 
           <!-- Cabeceras de columnas -->
           <div style="display: flex; gap: 0.75rem; padding: 0 0.5rem; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-            <div style="flex: 1;">Segundo del Menú</div>
-            <div style="width: 140px; text-align: center;">Cantidad</div>
+            <div style="flex: 1.4;">Segundo del Menú</div>
+            <div style="width: 145px;">Tipo</div>
+            <div style="width: 125px; text-align: center;">Cantidad</div>
             <div style="width: 36px;"></div>
           </div>
 
@@ -624,8 +706,9 @@ onMounted(cargarVentas);
                 padding: 0.6rem 0.75rem;
               "
             >
-              <div style="flex: 1;">
+              <div style="flex: 1.4;">
                 <Select
+                  v-if="item.tipoPlato !== 'Solo Sopa'"
                   v-model="item.idOpcionMenu"
                   :options="todasLasOpciones"
                   optionLabel="nombreSegundo"
@@ -633,21 +716,47 @@ onMounted(cargarVentas);
                   placeholder="Seleccione segundo..."
                   fluid
                 />
+                <div
+                  v-else
+                  style="
+                    padding: 0.65rem 0.85rem;
+                    background: #f0f9ff;
+                    border: 1px dashed #7dd3fc;
+                    border-radius: 8px;
+                    color: #0369a1;
+                    font-size: 0.85rem;
+                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.4rem;
+                  "
+                >
+                  <i class="pi pi-sparkles"></i>
+                  <span>Sopa del Día</span>
+                </div>
+              </div>
+
+              <div style="width: 145px;">
+                <Select
+                  v-model="item.tipoPlato"
+                  :options="tiposPlato"
+                  fluid
+                />
               </div>
 
               <!-- Selector de Cantidad Cómodo y Visible -->
-              <div style="width: 140px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+              <div style="width: 125px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
                 <Button
                   icon="pi pi-minus"
                   severity="secondary"
                   text
                   rounded
                   size="small"
-                  style="width: 28px; height: 28px; padding: 0;"
+                  style="width: 26px; height: 26px; padding: 0;"
                   :disabled="item.cantidad <= 1"
                   @click="item.cantidad = Math.max(1, item.cantidad - 1)"
                 />
-                <span style="font-weight: 800; font-size: 1.1rem; color: #1e293b; min-width: 28px; text-align: center;">
+                <span style="font-weight: 800; font-size: 1.05rem; color: #1e293b; min-width: 24px; text-align: center;">
                   {{ item.cantidad }}
                 </span>
                 <Button
@@ -656,7 +765,7 @@ onMounted(cargarVentas);
                   text
                   rounded
                   size="small"
-                  style="width: 28px; height: 28px; padding: 0;"
+                  style="width: 26px; height: 26px; padding: 0;"
                   :disabled="item.cantidad >= 10"
                   @click="item.cantidad = Math.min(10, item.cantidad + 1)"
                 />

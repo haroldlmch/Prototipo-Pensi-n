@@ -231,8 +231,29 @@ const alternarEstadoPago = async (extra: Extra) => {
 };
 
 const guardarExtra = async () => {
-  if (!formularioValido.value) {
-    errorMensaje.value = 'Complete todos los campos requeridos.';
+  const desc = descripcion.value.trim();
+  if (!desc) {
+    errorMensaje.value = 'La descripción del consumo extra es obligatoria.';
+    return;
+  }
+  if (desc.length > 200) {
+    errorMensaje.value = 'La descripción del extra no puede superar los 200 caracteres.';
+    return;
+  }
+
+  if (precio.value === null || precio.value < 0) {
+    errorMensaje.value = 'El precio debe ser un monto válido mayor o igual a 0.';
+    return;
+  }
+
+  if (tipoClienteForm.value === 'PENSIONADO' && !idPension.value) {
+    errorMensaje.value = 'Debe seleccionar el pensionado asociado.';
+    return;
+  }
+
+  const casualNom = clienteCasual.value.trim();
+  if (tipoClienteForm.value === 'CASUAL' && casualNom.length > 150) {
+    errorMensaje.value = 'El nombre o referencia del cliente no puede superar los 150 caracteres.';
     return;
   }
 
@@ -241,11 +262,11 @@ const guardarExtra = async () => {
 
   const payload = {
     fecha: convertirFechaISO(fecha.value),
-    descripcion: descripcion.value.trim(),
+    descripcion: desc,
     precio: Number(precio.value),
     tipoCliente: tipoClienteForm.value,
     idPension: tipoClienteForm.value === 'PENSIONADO' ? Number(idPension.value) : undefined,
-    clienteCasual: tipoClienteForm.value === 'CASUAL' ? (clienteCasual.value.trim() || 'Cliente Casual') : undefined,
+    clienteCasual: tipoClienteForm.value === 'CASUAL' ? (casualNom || 'Cliente Casual') : undefined,
     metodoPago: tipoClienteForm.value === 'CASUAL' ? metodoPago.value : undefined,
     estadoPago: estadoPago.value,
   };
@@ -644,6 +665,7 @@ onMounted(cargarDatos);
             <InputText
               v-model="clienteCasual"
               placeholder="Ej. Mesa 3, Mostrador, Juan"
+              maxlength="150"
               style="padding: 0.75rem 1rem;"
               fluid
             />

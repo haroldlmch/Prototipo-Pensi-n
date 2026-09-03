@@ -17,6 +17,7 @@ export class VentasCasualesService {
     const venta = this.ventasCasualesRepository.create({
       ...createVentasCasualeDto,
       fecha: createVentasCasualeDto.fecha.slice(0, 10) as any,
+      tipoPlato: createVentasCasualeDto.tipoPlato || 'Completo',
       opcionMenu: createVentasCasualeDto.idOpcionMenu
         ? ({ id: createVentasCasualeDto.idOpcionMenu } as any)
         : undefined,
@@ -60,6 +61,10 @@ export class VentasCasualesService {
 
     if (updateVentasCasualeDto.cantidadCompletos !== undefined) {
       venta.cantidadCompletos = updateVentasCasualeDto.cantidadCompletos;
+    }
+
+    if (updateVentasCasualeDto.tipoPlato !== undefined) {
+      venta.tipoPlato = updateVentasCasualeDto.tipoPlato;
     }
 
     if (updateVentasCasualeDto.precioUnitario !== undefined) {

@@ -16,6 +16,14 @@ export class VentasCasuale {
   })
   cantidadCompletos!: number;
 
+  @Column('varchar', {
+    name: 'tipo_plato',
+    length: 30,
+    nullable: true,
+    default: 'Completo',
+  })
+  tipoPlato?: string;
+
   @Column('decimal', {
     name: 'precio_unitario',
     precision: 10,

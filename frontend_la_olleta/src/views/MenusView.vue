@@ -119,8 +119,16 @@ const editarMenu = (menu: Menu) => {
 const agregarOpcion = () => {
   const texto = nuevaOpcionTexto.value.trim();
   if (!texto) return;
+  if (texto.length < 2) {
+    errorMensaje.value = 'El nombre del plato debe tener al menos 2 caracteres.';
+    return;
+  }
+  if (texto.length > 150) {
+    errorMensaje.value = 'El nombre del plato no puede superar los 150 caracteres.';
+    return;
+  }
   if (listaOpciones.value.includes(texto)) {
-    errorMensaje.value = 'Esta opción ya fue agregada al menú';
+    errorMensaje.value = 'Esta opción ya fue agregada al menú.';
     return;
   }
   errorMensaje.value = '';
@@ -136,17 +144,26 @@ const guardarMenu = async () => {
   errorMensaje.value = '';
 
   if (!fecha.value) {
-    errorMensaje.value = 'Debe seleccionar una fecha para el menú';
+    errorMensaje.value = 'Debe seleccionar una fecha para el menú.';
     return;
   }
 
-  if (!sopa.value.trim()) {
-    errorMensaje.value = 'Debe indicar la sopa del día';
+  const sopaTexto = sopa.value.trim();
+  if (!sopaTexto) {
+    errorMensaje.value = 'Debe indicar la sopa del día.';
+    return;
+  }
+  if (sopaTexto.length < 2) {
+    errorMensaje.value = 'El nombre de la sopa debe tener al menos 2 caracteres.';
+    return;
+  }
+  if (sopaTexto.length > 150) {
+    errorMensaje.value = 'El nombre de la sopa no puede superar los 150 caracteres.';
     return;
   }
 
   if (listaOpciones.value.length === 0) {
-    errorMensaje.value = 'Debe agregar al menos una opción de plato fuerte (segundo)';
+    errorMensaje.value = 'Debe agregar al menos una opción de plato fuerte (segundo).';
     return;
   }
 
@@ -154,7 +171,7 @@ const guardarMenu = async () => {
   try {
     const payload = {
       fecha: fecha.value.slice(0, 10),
-      sopa: sopa.value.trim(),
+      sopa: sopaTexto,
       opciones: listaOpciones.value,
     };
 
@@ -168,8 +185,8 @@ const guardarMenu = async () => {
     await cargarMenus();
   } catch (error: any) {
     console.error(error);
-    errorMensaje.value =
-      error.response?.data?.message || 'Error al guardar el menú del día';
+    const msg = error.response?.data?.message;
+    errorMensaje.value = Array.isArray(msg) ? msg.join('. ') : (msg || 'Error al guardar el menú del día.');
   } finally {
     guardando.value = false;
   }
@@ -451,6 +468,7 @@ onMounted(() => {
             <InputText
               v-model="sopa"
               placeholder="Ej: Sopa de Maní, Caldo..."
+              maxlength="150"
               style="padding: 0.7rem 0.9rem;"
             />
           </div>
@@ -483,6 +501,7 @@ onMounted(() => {
             <InputText
               v-model="nuevaOpcionTexto"
               placeholder="Nombre del segundo (ej: Milanesa con puré)..."
+              maxlength="150"
               style="flex: 1; padding: 0.6rem 0.85rem;"
               @keyup.enter="agregarOpcion"
             />

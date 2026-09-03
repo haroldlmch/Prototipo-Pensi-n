@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -7,17 +8,18 @@ import {
 } from 'class-validator';
 
 export class CreateMenuDto {
-  @IsString()
+  @IsNotEmpty({ message: 'La fecha del menú es obligatoria.' })
+  @IsString({ message: 'La fecha debe ser un texto válido.' })
   fecha!: string;
 
-  @IsString()
-  @MinLength(3)
-  @MaxLength(150)
+  @IsNotEmpty({ message: 'El nombre de la sopa es obligatorio.' })
+  @IsString({ message: 'El nombre de la sopa debe ser un texto válido.' })
+  @MinLength(2, { message: 'El nombre de la sopa debe tener al menos 2 caracteres.' })
+  @MaxLength(150, { message: 'El nombre de la sopa no puede superar los 150 caracteres.' })
   sopa!: string;
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
+  @IsArray({ message: 'Las opciones del menú deben ser una lista.' })
+  @IsString({ each: true, message: 'Cada opción de plato debe ser un texto válido.' })
   opciones?: string[];
 }
-

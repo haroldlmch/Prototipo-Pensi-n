@@ -14,6 +14,8 @@ import Tag from 'primevue/tag';
 
 import api from '../api/axios';
 
+type TipoPlato = 'Completo' | 'Solo Segundo' | 'Solo Sopa';
+
 interface Pensionado {
   id: number;
   nombreCompleto: string;
@@ -44,8 +46,16 @@ interface Consumo {
   fecha: string;
   cantidadCompletos: number;
   tipoConsumo: string;
+  tipoPlato?: string;
+  estadoEntrega?: string;
   pension?: Pension;
   opcionMenu?: OpcionMenu;
+}
+
+interface ItemPlatoForm {
+  idOpcionMenu: number | null;
+  tipoPlato: TipoPlato;
+  cantidad: number;
 }
 
 const consumos = ref<Consumo[]>([]);
@@ -62,6 +72,7 @@ const exitoMensaje = ref('');
 const busquedaRapida = ref('');
 const pensionRapidaSeleccionada = ref<Pension | null>(null);
 const opcionRapidaSeleccionada = ref<OpcionMenu | null>(null);
+const tipoPlatoRapido = ref<TipoPlato>('Completo');
 const tipoConsumoRapido = ref('Almuerzo en Comedor');
 const marcandoRapido = ref(false);
 
@@ -71,14 +82,12 @@ const modoEdicion = ref(false);
 const consumoId = ref<number | null>(null);
 const fechaForm = ref('');
 const cantidadCompletosForm = ref<number | null>(1);
+const tipoPlatoForm = ref<TipoPlato>('Completo');
+const tiposPlato: TipoPlato[] = ['Completo', 'Solo Segundo', 'Solo Sopa'];
 const tipoConsumoForm = ref('Almuerzo en Comedor');
 const idPensionForm = ref<number | null>(null);
 const idOpcionMenuForm = ref<number | null>(null);
 
-interface ItemPlatoForm {
-  idOpcionMenu: number | null;
-  cantidad: number;
-}
 const platosForm = ref<ItemPlatoForm[]>([]);
 
 const agregarPlatoForm = () => {
@@ -86,6 +95,7 @@ const agregarPlatoForm = () => {
     todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
   platosForm.value.push({
     idOpcionMenu: defaultId,
+    tipoPlato: 'Completo',
     cantidad: 1,
   });
 };
@@ -218,7 +228,7 @@ const registrarConsumoRapido = async () => {
     return;
   }
 
-  if (!opcionRapidaSeleccionada.value) {
+  if (tipoPlatoRapido.value !== 'Solo Sopa' && !opcionRapidaSeleccionada.value) {
     errorMensaje.value = 'Seleccione el plato fuerte / opción del menú';
     return;
   }
@@ -231,10 +241,11 @@ const registrarConsumoRapido = async () => {
     const hoy = obtenerFechaLocal();
     const payload = {
       idPension: pensionRapidaSeleccionada.value.id,
-      idOpcionMenu: opcionRapidaSeleccionada.value.id,
+      idOpcionMenu: tipoPlatoRapido.value === 'Solo Sopa' ? undefined : opcionRapidaSeleccionada.value?.id,
       fecha: hoy,
       cantidadCompletos: 1,
       tipoConsumo: tipoConsumoRapido.value,
+      tipoPlato: tipoPlatoRapido.value,
     };
 
     await api.post('/consumos', payload);
@@ -243,7 +254,7 @@ const registrarConsumoRapido = async () => {
       pensionRapidaSeleccionada.value.pensionado?.nombreCompleto || 'Pensionado';
     const quedan = pensionRapidaSeleccionada.value.completosDisponibles - 1;
 
-    exitoMensaje.value = `¡Consumo registrado exitosamente para ${pensionadoNombre}! (Saldo restante: ${quedan} platos)`;
+    exitoMensaje.value = `¡Consumo (${tipoPlatoRapido.value}) registrado exitosamente para ${pensionadoNombre}! (Saldo restante: ${quedan} platos)`;
 
     pensionRapidaSeleccionada.value = null;
     busquedaRapida.value = '';
@@ -262,12 +273,34 @@ const nuevoConsumoClasico = () => {
   consumoId.value = null;
   fechaForm.value = obtenerFechaLocal();
   tipoConsumoForm.value = 'Almuerzo en Comedor';
+  tipoPlatoForm.value = 'Completo';
   idPensionForm.value = null;
   const defaultId =
     todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
-  platosForm.value = [{ idOpcionMenu: defaultId, cantidad: 1 }];
+  platosForm.value = [{ idOpcionMenu: defaultId, tipoPlato: 'Completo', cantidad: 1 }];
   errorMensaje.value = '';
   visibleModal.value = true;
+};
+
+const marcandoEntregadoId = ref<number | null>(null);
+
+const marcarComoEntregado = async (consumo: Consumo) => {
+  marcandoEntregadoId.value = consumo.id;
+  try {
+    await api.patch(`/consumos/${consumo.id}`, {
+      estadoEntrega: 'ENTREGADO',
+    });
+    consumo.estadoEntrega = 'ENTREGADO';
+    exitoMensaje.value = `¡Pedido #${consumo.id} (${consumo.pension?.pensionado?.nombreCompleto || 'Pensionado'}) marcado como ENTREGADO!`;
+    setTimeout(() => {
+      exitoMensaje.value = '';
+    }, 4000);
+  } catch (error: any) {
+    console.error('Error al actualizar estado de entrega:', error);
+    errorMensaje.value = error.response?.data?.message || 'No se pudo actualizar el estado a entregado.';
+  } finally {
+    marcandoEntregadoId.value = null;
+  }
 };
 
 const editarConsumo = (c: Consumo) => {
@@ -276,6 +309,7 @@ const editarConsumo = (c: Consumo) => {
   fechaForm.value = c.fecha ? c.fecha.slice(0, 10) : '';
   cantidadCompletosForm.value = c.cantidadCompletos;
   tipoConsumoForm.value = c.tipoConsumo || 'Almuerzo en Comedor';
+  tipoPlatoForm.value = (c.tipoPlato as any) || 'Completo';
   idPensionForm.value = c.pension?.id || null;
   idOpcionMenuForm.value = c.opcionMenu?.id || null;
   errorMensaje.value = '';
@@ -295,7 +329,7 @@ const guardarConsumoFormulario = async () => {
   }
 
   if (modoEdicion.value) {
-    if (!idOpcionMenuForm.value) {
+    if (tipoPlatoForm.value !== 'Solo Sopa' && !idOpcionMenuForm.value) {
       errorMensaje.value = 'Seleccione el plato a consumir';
       return;
     }
@@ -304,10 +338,11 @@ const guardarConsumoFormulario = async () => {
     try {
       const payload = {
         idPension: idPensionForm.value,
-        idOpcionMenu: idOpcionMenuForm.value,
+        idOpcionMenu: tipoPlatoForm.value === 'Solo Sopa' ? undefined : idOpcionMenuForm.value,
         fecha: fechaForm.value.slice(0, 10),
         cantidadCompletos: Number(cantidadCompletosForm.value) || 1,
         tipoConsumo: tipoConsumoForm.value,
+        tipoPlato: tipoPlatoForm.value,
       };
 
       if (consumoId.value) {
@@ -331,7 +366,8 @@ const guardarConsumoFormulario = async () => {
 
     for (let i = 0; i < platosForm.value.length; i++) {
       const item = platosForm.value[i];
-      if (!item || !item.idOpcionMenu) {
+      if (!item) continue;
+      if (item.tipoPlato !== 'Solo Sopa' && !item.idOpcionMenu) {
         errorMensaje.value = `Seleccione el segundo en la fila #${i + 1}`;
         return;
       }
@@ -351,10 +387,11 @@ const guardarConsumoFormulario = async () => {
       for (const item of platosForm.value) {
         await api.post('/consumos', {
           idPension: idPensionForm.value,
-          idOpcionMenu: item.idOpcionMenu,
+          idOpcionMenu: item.tipoPlato === 'Solo Sopa' ? undefined : item.idOpcionMenu,
           fecha: fechaForm.value.slice(0, 10),
           cantidadCompletos: Number(item.cantidad),
           tipoConsumo: tipoConsumoForm.value,
+          tipoPlato: item.tipoPlato || 'Completo',
         });
       }
 
@@ -627,14 +664,25 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- Tipo de consumo -->
-            <div style="display: flex; gap: 0.5rem; align-items: center; margin-top: 0.25rem;">
-              <span style="font-size: 0.8rem; font-weight: 700; color: #78716c;">Modalidad:</span>
-              <Select
-                v-model="tipoConsumoRapido"
-                :options="tiposConsumo"
-                style="flex: 1; font-size: 0.85rem;"
-              />
+            <!-- Tipo de plato y Modalidad -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.25rem;">
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #78716c;">Tipo:</span>
+                <Select
+                  v-model="tipoPlatoRapido"
+                  :options="tiposPlato"
+                  style="flex: 1; font-size: 0.85rem;"
+                />
+              </div>
+
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <span style="font-size: 0.8rem; font-weight: 700; color: #78716c;">Modalidad:</span>
+                <Select
+                  v-model="tipoConsumoRapido"
+                  :options="tiposConsumo"
+                  style="flex: 1; font-size: 0.85rem;"
+                />
+              </div>
             </div>
           </div>
 
@@ -642,13 +690,13 @@ onMounted(() => {
           <Button
             :label="
               pensionRapidaSeleccionada
-                ? `Descontar Almuerzo para ${pensionRapidaSeleccionada.pensionado?.nombreCompleto}`
+                ? `Descontar Almuerzo (${tipoPlatoRapido}) para ${pensionRapidaSeleccionada.pensionado?.nombreCompleto}`
                 : 'Seleccione un pensionado arriba'
             "
             icon="pi pi-check-circle"
             severity="warn"
             raised
-            :disabled="!pensionRapidaSeleccionada || !opcionRapidaSeleccionada"
+            :disabled="!pensionRapidaSeleccionada || (tipoPlatoRapido !== 'Solo Sopa' && !opcionRapidaSeleccionada)"
             :loading="marcandoRapido"
             style="
               padding: 0.85rem;
@@ -744,10 +792,45 @@ onMounted(() => {
 
         <Column header="Plato Consumido" style="color: #475569;">
           <template #body="slotProps">
+            <span
+              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              style="color: #64748b; font-style: italic; font-weight: 600; font-size: 0.85rem;"
+            >
+              — (Sin segundo)
+            </span>
             <Tag
+              v-else
               :value="slotProps.data.opcionMenu?.nombreSegundo ?? 'No especificado'"
               severity="info"
               rounded
+            />
+          </template>
+        </Column>
+
+        <Column header="Tipo" style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <Tag
+              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              value="Solo Sopa"
+              rounded
+              icon="pi pi-sparkles"
+              style="font-size: 0.78rem; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;"
+            />
+            <Tag
+              v-else-if="slotProps.data.tipoPlato === 'Solo Segundo'"
+              value="Solo Segundo"
+              severity="warn"
+              icon="pi pi-minus-circle"
+              rounded
+              style="font-size: 0.78rem; font-weight: 700;"
+            />
+            <Tag
+              v-else
+              value="Completo"
+              severity="success"
+              icon="pi pi-check-circle"
+              rounded
+              style="font-size: 0.78rem; font-weight: 700;"
             />
           </template>
         </Column>
@@ -792,14 +875,80 @@ onMounted(() => {
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 110px; text-align: center;">
+        <Column header="Estado de Entrega" style="width: 155px; text-align: center;">
+          <template #body="slotProps">
+            <template v-if="slotProps.data.tipoConsumo === 'WHATSAPP'">
+              <Button
+                v-if="slotProps.data.estadoEntrega === 'EN_ESPERA'"
+                label="EN ESPERA"
+                icon="pi pi-clock"
+                size="small"
+                :loading="marcandoEntregadoId === slotProps.data.id"
+                title="Haga clic para marcar este pedido como ENTREGADO"
+                style="
+                  font-weight: 800;
+                  font-size: 0.75rem;
+                  padding: 0.3rem 0.65rem;
+                  background-color: #fef3c7;
+                  color: #92400e;
+                  border: 1.5px solid #f59e0b;
+                  border-radius: 20px;
+                  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.2);
+                  transition: all 0.2s ease;
+                  cursor: pointer;
+                "
+                @click="marcarComoEntregado(slotProps.data)"
+              />
+              <Button
+                v-else
+                label="ENTREGADO"
+                icon="pi pi-check-circle"
+                size="small"
+                disabled
+                style="
+                  font-weight: 800;
+                  font-size: 0.75rem;
+                  padding: 0.3rem 0.65rem;
+                  background-color: #dcfce7 !important;
+                  color: #166534 !important;
+                  border: 1.5px solid #86efac !important;
+                  border-radius: 20px;
+                  opacity: 0.9 !important;
+                  cursor: not-allowed;
+                "
+              />
+            </template>
+            <template v-else>
+              <Button
+                label="ENTREGADO"
+                icon="pi pi-check"
+                size="small"
+                disabled
+                style="
+                  font-weight: 800;
+                  font-size: 0.75rem;
+                  padding: 0.3rem 0.65rem;
+                  background-color: #f1f5f9 !important;
+                  color: #64748b !important;
+                  border: 1.5px solid #cbd5e1 !important;
+                  border-radius: 20px;
+                  opacity: 0.85 !important;
+                  cursor: not-allowed;
+                "
+              />
+            </template>
+          </template>
+        </Column>
+
+        <Column header="Acciones" style="width: 140px; text-align: center;">
           <template #body="slotProps">
             <Button
               icon="pi pi-pencil"
               severity="warning"
               text
               rounded
-              title="Editar Consumo"
+              aria-label="Editar consumo"
+              style="margin-right: .25rem;"
               @click="editarConsumo(slotProps.data)"
             />
             <Button
@@ -807,7 +956,7 @@ onMounted(() => {
               severity="danger"
               text
               rounded
-              title="Eliminar Consumo (Devuelve saldo)"
+              aria-label="Eliminar consumo"
               @click="confirmarEliminar(slotProps.data.id)"
             />
           </template>
@@ -815,19 +964,17 @@ onMounted(() => {
       </DataTable>
     </div>
 
-    <!-- Dialogo Registro Clásico / Edición -->
     <Dialog
       v-model:visible="visibleModal"
       modal
       :header="modoEdicion ? 'Editar Consumo' : 'Nuevo Consumo Manual / Múltiples Platos'"
-      :style="{ width: '640px' }"
+      :style="{ width: '680px' }"
     >
       <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
         <Message v-if="errorMensaje" severity="error" :closable="false">
           {{ errorMensaje }}
         </Message>
 
-        <!-- Selección de Pensión -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
           <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Pensión / Pensionado *</label>
           <Select
@@ -840,7 +987,6 @@ onMounted(() => {
           />
         </div>
 
-        <!-- Fecha y Modalidad -->
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
             <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Fecha *</label>
@@ -868,18 +1014,47 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Modo Edición: Formulario Simple -->
         <div v-if="modoEdicion" style="display: flex; flex-direction: column; gap: 1rem;">
-          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo *</label>
-            <Select
-              v-model="idOpcionMenuForm"
-              :options="todasLasOpciones"
-              optionLabel="nombreSegundo"
-              optionValue="id"
-              placeholder="Seleccione el plato..."
-              fluid
-            />
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Plato Fuerte / Segundo</label>
+              <Select
+                v-if="tipoPlatoForm !== 'Solo Sopa'"
+                v-model="idOpcionMenuForm"
+                :options="todasLasOpciones"
+                optionLabel="nombreSegundo"
+                optionValue="id"
+                placeholder="Seleccione el plato..."
+                fluid
+              />
+              <div
+                v-else
+                style="
+                  padding: 0.65rem 0.85rem;
+                  background: #f0f9ff;
+                  border: 1px dashed #7dd3fc;
+                  border-radius: 8px;
+                  color: #0369a1;
+                  font-size: 0.85rem;
+                  font-weight: 700;
+                  display: flex;
+                  align-items: center;
+                  gap: 0.4rem;
+                "
+              >
+                <i class="pi pi-sparkles"></i>
+                <span>Sopa del Día (Sin segundo)</span>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+              <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Tipo de Plato</label>
+              <Select
+                v-model="tipoPlatoForm"
+                :options="tiposPlato"
+                fluid
+              />
+            </div>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
@@ -894,14 +1069,13 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Modo Creación: Lista Dinámica de Platos y Cantidades -->
         <div v-else style="display: flex; flex-direction: column; gap: 0.75rem;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <label style="font-weight: 800; color: #1e293b; font-size: 0.9rem;">
               🍛 Platos Fuertes / Segundos Seleccionados
             </label>
             <Button
-              label="Agregar otro segundo"
+              label="Agregar otro plato"
               icon="pi pi-plus"
               size="small"
               severity="secondary"
@@ -911,10 +1085,10 @@ onMounted(() => {
             />
           </div>
 
-          <!-- Cabeceras de columnas -->
           <div style="display: flex; gap: 0.75rem; padding: 0 0.5rem; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
-            <div style="flex: 1;">Segundo del Menú</div>
-            <div style="width: 140px; text-align: center;">Cantidad</div>
+            <div style="flex: 1.4;">Segundo del Menú</div>
+            <div style="width: 145px;">Tipo</div>
+            <div style="width: 125px; text-align: center;">Cantidad</div>
             <div style="width: 36px;"></div>
           </div>
 
@@ -932,8 +1106,9 @@ onMounted(() => {
                 padding: 0.6rem 0.75rem;
               "
             >
-              <div style="flex: 1;">
+              <div style="flex: 1.4;">
                 <Select
+                  v-if="item.tipoPlato !== 'Solo Sopa'"
                   v-model="item.idOpcionMenu"
                   :options="todasLasOpciones"
                   optionLabel="nombreSegundo"
@@ -941,21 +1116,47 @@ onMounted(() => {
                   placeholder="Seleccione segundo..."
                   fluid
                 />
+                <div
+                  v-else
+                  style="
+                    padding: 0.65rem 0.85rem;
+                    background: #f0f9ff;
+                    border: 1px dashed #7dd3fc;
+                    border-radius: 8px;
+                    color: #0369a1;
+                    font-size: 0.85rem;
+                    font-weight: 700;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.4rem;
+                  "
+                >
+                  <i class="pi pi-sparkles"></i>
+                  <span>Sopa del Día</span>
+                </div>
+              </div>
+
+              <div style="width: 145px;">
+                <Select
+                  v-model="item.tipoPlato"
+                  :options="tiposPlato"
+                  fluid
+                />
               </div>
 
               <!-- Selector de Cantidad Cómodo y Visible -->
-              <div style="width: 140px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+              <div style="width: 125px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
                 <Button
                   icon="pi pi-minus"
                   severity="secondary"
                   text
                   rounded
                   size="small"
-                  style="width: 28px; height: 28px; padding: 0;"
+                  style="width: 26px; height: 26px; padding: 0;"
                   :disabled="item.cantidad <= 1"
                   @click="item.cantidad = Math.max(1, item.cantidad - 1)"
                 />
-                <span style="font-weight: 800; font-size: 1.1rem; color: #1e293b; min-width: 28px; text-align: center;">
+                <span style="font-weight: 800; font-size: 1.05rem; color: #1e293b; min-width: 24px; text-align: center;">
                   {{ item.cantidad }}
                 </span>
                 <Button
@@ -964,7 +1165,7 @@ onMounted(() => {
                   text
                   rounded
                   size="small"
-                  style="width: 28px; height: 28px; padding: 0;"
+                  style="width: 26px; height: 26px; padding: 0;"
                   :disabled="item.cantidad >= 10"
                   @click="item.cantidad = Math.min(10, item.cantidad + 1)"
                 />

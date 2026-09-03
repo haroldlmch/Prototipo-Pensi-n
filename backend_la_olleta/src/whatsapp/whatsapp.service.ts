@@ -226,7 +226,9 @@ export class WhatsappService implements OnModuleInit {
 `🤖 *L'OLLETA - COMANDOS DISPONIBLES*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • *#pedido [platos]* : Reservar tu almuerzo de hoy.
-  _Ejemplo:_ \`#pedido 1 salpicon, 1 chuleta, 2 sopas\`
+  _Ejemplos:_
+  • _Solo segundo:_ \`#pedido 1 chuleta\` (no incluye sopa)
+  • _Con sopa (Completo):_ \`#pedido 1 completo chuleta\` o \`#pedido 1 sopa, 1 chuleta\`
 • *#cancelar* : Cancelar tu pedido de hoy y devolver tus platos.
 • *#saldo* : Consultar tus almuerzos disponibles.
 • *#ayuda* : Ver esta lista de comandos.
@@ -265,20 +267,39 @@ export class WhatsappService implements OnModuleInit {
   private parsePedido(
     rawText: string,
     menuOpciones: OpcionesMenu[],
+    nombreSopaMenu?: string,
   ): {
     items: { opcionMenu: OpcionesMenu; cantidad: number }[];
     totalCantidad: number;
-    observacionSopas?: string;
+    tieneSopa: boolean;
+    observacionSopas: string;
   } {
-    // 1. Detectar notas de sopa (ej. "2 sopas", "sin sopa", "1 sopa", "3 sopas", "solo segundo")
-    let observacionSopas: string | undefined = undefined;
-    const sopaMatch = rawText.match(/(\d+)\s*sopas?|sin\s*sopas?|solo\s*segundo/i);
-    if (sopaMatch) {
-      observacionSopas = sopaMatch[0].trim();
+    // 1. Detectar si el cliente pidió explícitamente sopa / completo o si pidió explícitamente solo segundo
+    const pideSoloSegundo = /sin\s*sopas?|solo\s*segundos?|solamente\s*segundos?/i.test(rawText);
+    const pideCompletoOSopa = /(\d+)\s*sopas?|con\s*sopas?|\bsopas?\b|\bcompletos?\b/i.test(rawText);
+
+    let tieneSopa = false;
+    let observacionSopas = 'No (Solo Segundo)';
+
+    if (pideSoloSegundo) {
+      tieneSopa = false;
+      observacionSopas = 'No (Solo Segundo)';
+    } else if (pideCompletoOSopa) {
+      tieneSopa = true;
+      const countSopaMatch = rawText.match(/(\d+)\s*sopas?/i);
+      if (countSopaMatch && countSopaMatch[1]) {
+        observacionSopas = `Sí, ${countSopaMatch[1]} sopa(s) (${nombreSopaMenu || 'Sopa del día'})`;
+      } else {
+        observacionSopas = nombreSopaMenu ? `Sí (${nombreSopaMenu})` : 'Sí (Completo con Sopa)';
+      }
+    } else {
+      // Regla: Si no escribe "sopa" ni "completo", NO se asume sopa, es solo segundo
+      tieneSopa = false;
+      observacionSopas = 'No (Solo Segundo)';
     }
 
     // 2. Limpiar texto y separar por líneas, comas, signos +, o la palabra " y "
-    const cleanText = rawText.replace(/(\d+)\s*sopas?|sin\s*sopas?|solo\s*segundo/gi, ' ');
+    const cleanText = rawText.replace(/(\d+)\s*sopas?|sin\s*sopas?|con\s*sopas?|solo\s*segundos?|solamente\s*segundos?|\bsopas?\b|\bcompletos?\b/gi, ' ');
     const lineas = cleanText
       .split(/[\n,+]|\s+y\s+/i)
       .map((l) => l.trim())
@@ -369,6 +390,7 @@ export class WhatsappService implements OnModuleInit {
     return {
       items,
       totalCantidad,
+      tieneSopa,
       observacionSopas,
     };
   }
@@ -494,7 +516,7 @@ Por favor renueva tu plan en administración.
     }
 
     // 4. Parsear el pedido múltiple (cantidades y platos)
-    const parseResult = this.parsePedido(pedidoDetalle, opcionesDisponibles);
+    const parseResult = this.parsePedido(pedidoDetalle, opcionesDisponibles, menu?.sopa);
 
     if (parseResult.items.length === 0 || parseResult.totalCantidad <= 0) {
       await this.sock?.sendMessage(remoteJid, {
@@ -528,6 +550,8 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
           idOpcionMenu: item.opcionMenu.id,
           cantidadCompletos: item.cantidad,
           tipoConsumo: 'WHATSAPP',
+          tipoPlato: parseResult.tieneSopa ? 'Completo' : 'Solo Segundo',
+          estadoEntrega: 'EN_ESPERA',
           fecha: hoyStr,
         });
       }
@@ -548,9 +572,7 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
         .map((it) => `  • ${it.cantidad}x ${it.opcionMenu.nombreSegundo}`)
         .join('\n');
 
-      const detalleSopaTexto = parseResult.observacionSopas
-        ? parseResult.observacionSopas
-        : (menu?.sopa ? `Sopa ${menu.sopa}` : 'Del día');
+      const detalleSopaTexto = parseResult.observacionSopas;
 
       const replyMessage =
 `🍽️ *L'OLLETA - PEDIDO CONFIRMADO*

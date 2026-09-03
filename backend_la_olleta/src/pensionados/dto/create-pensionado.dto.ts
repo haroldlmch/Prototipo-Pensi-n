@@ -1,25 +1,24 @@
 import {
-IsBoolean,
-IsOptional,
-IsString,
-MaxLength,
-MinLength,
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
 } from 'class-validator';
 
 export class CreatePensionadoDto {
+  @IsNotEmpty({ message: 'El nombre completo es obligatorio.' })
+  @IsString({ message: 'El nombre completo debe ser un texto válido.' })
+  @MinLength(3, { message: 'El nombre completo debe tener al menos 3 caracteres.' })
+  @MaxLength(150, { message: 'El nombre completo no puede superar los 150 caracteres.' })
+  nombreCompleto!: string;
 
-@IsString()
-@MinLength(3)
-@MaxLength(150)
-nombreCompleto!: string;
+  @IsOptional()
+  @IsString({ message: 'El teléfono debe ser un texto válido.' })
+  @MaxLength(20, { message: 'El número de teléfono no puede superar los 20 caracteres.' })
+  telefono?: string;
 
-@IsOptional()
-@IsString()
-@MaxLength(20)
-telefono?: string;
-
-@IsBoolean()
-estado!: boolean;
+  @IsBoolean({ message: 'El estado debe ser activo o inactivo.' })
+  estado!: boolean;
 }
-
-

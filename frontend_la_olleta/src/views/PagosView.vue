@@ -187,8 +187,24 @@ const editarPago = (pago: Pago) => {
 };
 
 const guardarPago = async () => {
-  if (!formularioValido.value) {
-    errorMensaje.value = 'Complete todos los campos requeridos.';
+  if (!idPension.value) {
+    errorMensaje.value = 'Debe seleccionar una pensión.';
+    return;
+  }
+  if (cantidadCompletosRecarga.value === null || Number(cantidadCompletosRecarga.value) < 1) {
+    errorMensaje.value = 'La cantidad de platos debe ser de al menos 1 plato.';
+    return;
+  }
+  if (Number(cantidadCompletosRecarga.value) > 9999) {
+    errorMensaje.value = 'La cantidad de platos no puede superar los 9999.';
+    return;
+  }
+  if (precioUnitario.value === null || Number(precioUnitario.value) < 0) {
+    errorMensaje.value = 'El precio unitario no puede ser negativo.';
+    return;
+  }
+  if (montoTotal.value === null || Number(montoTotal.value) < 0) {
+    errorMensaje.value = 'El monto total no puede ser negativo.';
     return;
   }
 

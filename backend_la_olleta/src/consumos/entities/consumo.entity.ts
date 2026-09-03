@@ -4,7 +4,7 @@ import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGenerat
 
 @Entity('consumos')
 export class Consumo {
-    @PrimaryGeneratedColumn('identity')
+  @PrimaryGeneratedColumn('identity')
   id!: number;
 
   @Column('date', {
@@ -23,6 +23,22 @@ export class Consumo {
   })
   tipoConsumo!: string;
 
+  @Column('varchar', {
+    name: 'tipo_plato',
+    length: 30,
+    nullable: true,
+    default: 'Completo',
+  })
+  tipoPlato?: string;
+
+  @Column('varchar', {
+    name: 'estado_entrega',
+    length: 30,
+    nullable: true,
+    default: 'ENTREGADO',
+  })
+  estadoEntrega?: string;
+
   @ManyToOne(
     () => Pensione,
     (pension) => pension.consumos,
@@ -40,14 +56,14 @@ export class Consumo {
     () => OpcionesMenu,
     (opcionMenu) => opcionMenu.consumos,
     {
-      nullable: false,
-      onDelete: 'RESTRICT',
+      nullable: true,
+      onDelete: 'SET NULL',
     },
   )
   @JoinColumn({
     name: 'id_opcion_menu',
   })
-  opcionMenu!: OpcionesMenu;
+  opcionMenu?: OpcionesMenu;
 
   @CreateDateColumn({
     name: 'fecha_creacion',

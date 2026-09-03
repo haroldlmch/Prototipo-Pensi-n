@@ -44,6 +44,7 @@ const cantidadCompletos = ref('');
 const completosDisponibles = ref('');
 const estado = ref('ACTIVA');
 const idPensionado = ref<number | null>(null);
+const errorMensajePension = ref('');
 
 // Lógica de Renovación y Traspaso de Saldo
 const idPensionAnterior = ref<number | null>(null);
@@ -164,86 +165,92 @@ const renovarPension = (pension: any) => {
 
 const editarPension = (pension: any) => {
   pensionId.value = pension.id;
-
-  // Extract date part only (yyyy-MM-dd)
-  fechaInicio.value = pension.fechaInicio ? pension.fechaInicio.slice(0, 10) : '';
-
-  cantidadCompletos.value =
-    String(pension.cantidadCompletos);
-
-  completosDisponibles.value =
-    String(pension.completosDisponibles);
-
-  estado.value =
-    pension.estado;
-
-  idPensionado.value =
-    pension.pensionado?.id;
+  fechaInicio.value = pension.fechaInicio?.slice(0, 10);
+  cantidadCompletos.value = pension.cantidadCompletos;
+  completosDisponibles.value = pension.completosDisponibles;
+  estado.value = pension.estado;
+  idPensionado.value = pension.pensionado?.id;
 
   idPensionAnterior.value = null;
   saldoRestanteAnterior.value = 0;
   modoEdicion.value = true;
+  errorMensajePension.value = '';
   visible.value = true;
 };
 
+const pensionPendienteCreacion = ref<any>(null);
+
 const guardarPension = async () => {
-  try {
-    const comprados = Number(cantidadCompletos.value) || 0;
-    const saldoExtra = (!modoEdicion.value && traspasarSaldo.value && saldoRestanteAnterior.value > 0)
+  if (!idPensionado.value) {
+    errorMensajePension.value = 'Debe seleccionar un pensionado.';
+    return;
+  }
+
+  const comprados = Number(cantidadCompletos.value);
+  if (isNaN(comprados) || comprados < 1) {
+    errorMensajePension.value = 'La cantidad de platos debe ser un número mayor a 0.';
+    return;
+  }
+  if (comprados > 9999) {
+    errorMensajePension.value = 'La cantidad de platos no puede superar los 9999.';
+    return;
+  }
+
+  errorMensajePension.value = '';
+
+  if (modoEdicion.value) {
+    // Modo Edición: Actualizar pensión existente directamente
+    try {
+      const payload = {
+        fechaInicio: fechaInicio.value.slice(0, 10),
+        cantidadCompletos: Number(cantidadCompletos.value),
+        completosDisponibles: Number(completosDisponibles.value),
+        estado: estado.value,
+        idPensionado: Number(idPensionado.value),
+      };
+
+      await api.patch(`/pensiones/${pensionId.value}`, payload);
+      visible.value = false;
+      limpiarFormulario();
+      await cargarPensiones();
+    } catch (error: any) {
+      console.error(error);
+      const msg = error.response?.data?.message;
+      errorMensajePension.value = Array.isArray(msg) ? msg.join('. ') : (msg || 'Error al actualizar la pensión.');
+    }
+  } else {
+    // Modo Nueva Pensión: NO guardar en base de datos aún.
+    // Pasar los datos temporales al modal de pago para confirmación conjunta.
+    const saldoExtra = (traspasarSaldo.value && saldoRestanteAnterior.value > 0)
       ? Number(saldoRestanteAnterior.value)
       : 0;
 
-    const totalPlatosPaquete = comprados + saldoExtra;
-    const disponiblesCalculados = modoEdicion.value
-      ? Number(completosDisponibles.value)
-      : totalPlatosPaquete;
+    const pensionadoObj = pensionados.value.find((p) => p.id === Number(idPensionado.value));
 
-    const payload = {
+    pensionPendienteCreacion.value = {
       fechaInicio: fechaInicio.value.slice(0, 10),
-      cantidadCompletos: totalPlatosPaquete,
-      completosDisponibles: disponiblesCalculados,
-      estado: estado.value,
       idPensionado: Number(idPensionado.value),
-      idPensionAnterior: (!modoEdicion.value && traspasarSaldo.value && idPensionAnterior.value) ? Number(idPensionAnterior.value) : undefined,
+      idPensionAnterior: (traspasarSaldo.value && idPensionAnterior.value) ? Number(idPensionAnterior.value) : undefined,
+      saldoRestanteAnterior: saldoExtra,
+      estado: estado.value,
+      pensionado: pensionadoObj,
     };
 
-    let response;
-    if (modoEdicion.value) {
-      response = await api.patch(
-        `/pensiones/${pensionId.value}`,
-        payload,
-      );
-    } else {
-      response = await api.post(
-        '/pensiones',
-        payload,
-      );
-    }
+    pensionSeleccionadaParaPago.value = {
+      id: 'Nueva',
+      pensionado: pensionadoObj,
+      cantidadCompletos: comprados + saldoExtra,
+    };
+    idPensionPago.value = null; // Pensión nueva pendiente de confirmación
+    fechaPago.value = obtenerFechaLocal();
+    precioUnitario.value = precioPensionadoSugerido.value || 15;
+    cantidadCompletosPago.value = comprados;
+    montoTotal.value = (precioUnitario.value ?? 0) * comprados;
+    metodoPago.value = 'Efectivo';
+    errorMensajePago.value = '';
 
-    const pensionGuardada = response.data;
     visible.value = false;
-
-    if (!modoEdicion.value) {
-      const pensionadoObj = pensionados.value.find((p) => p.id === payload.idPensionado);
-      pensionSeleccionadaParaPago.value = {
-        ...pensionGuardada,
-        pensionado: pensionadoObj,
-      };
-      idPensionPago.value = pensionGuardada.id;
-      fechaPago.value = obtenerFechaLocal();
-      precioUnitario.value = precioPensionadoSugerido.value;
-      // Cobrar solo los platos que compra hoy (8)
-      cantidadCompletosPago.value = comprados;
-      montoTotal.value = (precioUnitario.value ?? 0) * comprados;
-      errorMensajePago.value = '';
-      visiblePago.value = true;
-    }
-
-    limpiarFormulario();
-    await cargarPensiones();
-
-  } catch (error) {
-    console.error(error);
+    visiblePago.value = true;
   }
 };
 
@@ -391,10 +398,13 @@ const obtenerFechaLocal = () => {
   return `${year}-${month}-${day}`;
 };
 
+const metodoPago = ref('Efectivo');
+const metodosPago = ['Efectivo', 'QR'];
+
 const formularioPagoValido = computed(
   () =>
     Boolean(fechaPago.value) &&
-    idPensionPago.value !== null &&
+    (idPensionPago.value !== null || pensionPendienteCreacion.value !== null) &&
     precioUnitario.value !== null &&
     precioUnitario.value >= 0 &&
     cantidadCompletosPago.value !== null &&
@@ -402,6 +412,14 @@ const formularioPagoValido = computed(
     montoTotal.value !== null &&
     montoTotal.value >= 0,
 );
+
+watch([cantidadCompletosPago, precioUnitario], () => {
+  if (cantidadCompletosPago.value === null || precioUnitario.value === null) {
+    montoTotal.value = null;
+    return;
+  }
+  montoTotal.value = Number(cantidadCompletosPago.value) * Number(precioUnitario.value);
+});
 
 const guardarPago = async () => {
   if (!formularioPagoValido.value) {
@@ -412,19 +430,57 @@ const guardarPago = async () => {
   guardandoPago.value = true;
   errorMensajePago.value = '';
 
-  const payload = {
-    fechaPago: fechaPago.value.slice(0, 10),
-    precioUnitario: Number(precioUnitario.value),
-    montoTotal: Number(montoTotal.value),
-    idPension: Number(idPensionPago.value),
-    cantidadCompletos: Number(cantidadCompletosPago.value) || undefined,
-  };
-
   try {
-    await api.post('/pagos', payload);
-    visiblePago.value = false;
-    await cargarPensiones();
-  } catch (error) {
+    if (pensionPendienteCreacion.value) {
+      // 1. Crear Pensión ahora que el usuario confirmó el pago
+      const compradosFinal = Number(cantidadCompletosPago.value) || 0;
+      const saldoExtra = Number(pensionPendienteCreacion.value.saldoRestanteAnterior) || 0;
+      const totalPlatos = compradosFinal + saldoExtra;
+
+      const payloadPension = {
+        fechaInicio: pensionPendienteCreacion.value.fechaInicio,
+        cantidadCompletos: totalPlatos,
+        completosDisponibles: totalPlatos,
+        estado: pensionPendienteCreacion.value.estado,
+        idPensionado: pensionPendienteCreacion.value.idPensionado,
+        idPensionAnterior: pensionPendienteCreacion.value.idPensionAnterior,
+      };
+
+      const resPension = await api.post('/pensiones', payloadPension);
+      const nuevaPensionId = resPension.data.id;
+
+      // 2. Registrar el Pago asociado
+      const payloadPago = {
+        fechaPago: fechaPago.value.slice(0, 10),
+        precioUnitario: Number(precioUnitario.value),
+        montoTotal: Number(montoTotal.value),
+        idPension: Number(nuevaPensionId),
+        metodoPago: metodoPago.value,
+        cantidadCompletos: compradosFinal,
+      };
+
+      await api.post('/pagos', payloadPago);
+
+      pensionPendienteCreacion.value = null;
+      visiblePago.value = false;
+      limpiarFormulario();
+      await cargarPensiones();
+    } else if (idPensionPago.value) {
+      // Pago para pensión ya existente
+      const payload = {
+        fechaPago: fechaPago.value.slice(0, 10),
+        precioUnitario: Number(precioUnitario.value),
+        montoTotal: Number(montoTotal.value),
+        idPension: Number(idPensionPago.value),
+        metodoPago: metodoPago.value,
+        cantidadCompletos: Number(cantidadCompletosPago.value) || undefined,
+      };
+
+      await api.post('/pagos', payload);
+      visiblePago.value = false;
+      await cargarPensiones();
+    }
+  } catch (error: any) {
     console.error(error);
     const posibleError = error as {
       response?: { data?: { message?: string | string[] } };
@@ -432,7 +488,7 @@ const guardarPago = async () => {
     const mensaje = posibleError.response?.data?.message;
     errorMensajePago.value = Array.isArray(mensaje)
       ? mensaje.join('. ')
-      : (mensaje ?? 'No se pudo registrar el pago.');
+      : (mensaje ?? 'No se pudo completar el registro del pago.');
   } finally {
     guardandoPago.value = false;
   }
@@ -630,6 +686,10 @@ onMounted(async () => {
           box-sizing: border-box;
         "
       >
+        <Message v-if="errorMensajePension" severity="error" :closable="false">
+          {{ errorMensajePension }}
+        </Message>
+
         <!-- Selección de Pensionado -->
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
           <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Pensionado *</label>
@@ -697,6 +757,7 @@ onMounted(async () => {
             <InputText
               v-model="cantidadCompletos"
               placeholder="Ej. 7"
+              maxlength="5"
               fluid
               style="padding: 0.75rem 1rem; width: 100%; box-sizing: border-box;"
             />
@@ -707,6 +768,7 @@ onMounted(async () => {
             <InputText
               v-model="completosDisponibles"
               placeholder="Ej. 8"
+              maxlength="5"
               fluid
               style="padding: 0.75rem 1rem; font-weight: 800; color: #059669; background: #f8fafc; width: 100%; box-sizing: border-box;"
               :disabled="!modoEdicion"
@@ -800,7 +862,7 @@ onMounted(async () => {
     <Dialog
       v-model:visible="visiblePago"
       modal
-      header="Registrar Pago de Pensión"
+      :header="pensionPendienteCreacion ? 'Registrar Pago y Activar Pensión' : 'Registrar Pago de Pensión'"
       :style="{ width: '480px' }"
     >
       <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
@@ -814,40 +876,51 @@ onMounted(async () => {
         </Message>
 
         <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensión</label>
+          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Pensión / Pensionado</label>
           <InputText
-            :value="pensionSeleccionadaParaPago ? `${pensionSeleccionadaParaPago.pensionado?.nombreCompleto || 'Pensionado'} - Pensión #${pensionSeleccionadaParaPago.id}` : ''"
+            :value="pensionSeleccionadaParaPago ? `${pensionSeleccionadaParaPago.pensionado?.nombreCompleto || 'Pensionado'} ${pensionSeleccionadaParaPago.id === 'Nueva' ? '(Nueva Pensión)' : '- Pensión #' + pensionSeleccionadaParaPago.id}` : ''"
             disabled
             style="padding: 0.75rem 1rem;"
           />
           <small v-if="pensionSeleccionadaParaPago" style="color: #3b82f6; font-weight: 600; margin-top: 0.1rem;">
-            * Incluye un total de {{ pensionSeleccionadaParaPago.cantidadCompletos }} completos.
+            * Se activará con un total de {{ (Number(cantidadCompletosPago) || 0) + Number(pensionPendienteCreacion?.saldoRestanteAnterior || 0) }} platos disponibles.
           </small>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-          <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha de Pago</label>
-          <input
-            v-model="fechaPago"
-            type="date"
-            style="
-              width: 100%;
-              box-sizing: border-box;
-              padding: 0.75rem 1rem;
-              border: 1px solid #cbd5e1;
-              border-radius: 6px;
-              font-family: inherit;
-              font-size: 0.95rem;
-              color: #334155;
-              outline: none;
-              transition: border-color 0.2s ease;
-            "
-          />
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Platos a Recargar</label>
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Fecha de Pago</label>
+            <input
+              v-model="fechaPago"
+              type="date"
+              style="
+                width: 100%;
+                box-sizing: border-box;
+                padding: 0.75rem 1rem;
+                border: 1px solid #cbd5e1;
+                border-radius: 6px;
+                font-family: inherit;
+                font-size: 0.95rem;
+                color: #334155;
+                outline: none;
+                transition: border-color 0.2s ease;
+              "
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Método de Pago</label>
+            <Select
+              v-model="metodoPago"
+              :options="metodosPago"
+              fluid
+            />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label style="font-weight: 600; color: #475569; font-size: 0.85rem;">Platos a Cobrar</label>
             <InputNumber
               v-model="cantidadCompletosPago"
               :min="1"
@@ -882,15 +955,24 @@ onMounted(async () => {
           />
         </div>
 
-        <Button
-          label="Guardar Registro de Pago"
-          icon="pi pi-save"
-          style="margin-top: 0.5rem; padding: 0.75rem;"
-          :loading="guardandoPago"
-          :disabled="!formularioPagoValido"
-          fluid
-          @click="guardarPago"
-        />
+        <div style="display: flex; gap: 0.75rem; margin-top: 0.5rem;">
+          <Button
+            label="Cancelar"
+            severity="secondary"
+            text
+            style="flex: 1; padding: 0.75rem;"
+            @click="visiblePago = false; pensionPendienteCreacion = null;"
+          />
+          <Button
+            :label="pensionPendienteCreacion ? 'Confirmar y Activar Pensión' : 'Guardar Registro de Pago'"
+            icon="pi pi-check"
+            severity="success"
+            style="flex: 2; padding: 0.75rem; font-weight: 700;"
+            :loading="guardandoPago"
+            :disabled="!formularioPagoValido"
+            @click="guardarPago"
+          />
+        </div>
       </div>
     </Dialog>
 

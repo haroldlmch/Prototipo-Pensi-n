@@ -35,12 +35,14 @@ export class ConsumosService {
       throw new NotFoundException('Pensión no encontrada');
     }
 
-    const opcionMenu = await this.opcionMenuRepository.findOne({
-      where: { id: createConsumoDto.idOpcionMenu },
-    });
-
-    if (!opcionMenu) {
-      throw new NotFoundException('Opción de menú no encontrada');
+    let opcionMenu: OpcionesMenu | undefined = undefined;
+    if (createConsumoDto.idOpcionMenu) {
+      const encontrada = await this.opcionMenuRepository.findOne({
+        where: { id: createConsumoDto.idOpcionMenu },
+      });
+      if (encontrada) {
+        opcionMenu = encontrada;
+      }
     }
 
     if (pension.completosDisponibles < createConsumoDto.cantidadCompletos) {
@@ -59,10 +61,16 @@ export class ConsumosService {
 
     const fechaLimpia = createConsumoDto.fecha.slice(0, 10);
 
+    const estadoEntregaCalculado = createConsumoDto.estadoEntrega
+      ? createConsumoDto.estadoEntrega
+      : (createConsumoDto.tipoConsumo === 'WHATSAPP' ? 'EN_ESPERA' : 'ENTREGADO');
+
     const consumo = this.consumoRepository.create({
       fecha: fechaLimpia as any,
       cantidadCompletos: createConsumoDto.cantidadCompletos,
       tipoConsumo: createConsumoDto.tipoConsumo,
+      tipoPlato: createConsumoDto.tipoPlato || 'Completo',
+      estadoEntrega: estadoEntregaCalculado,
       pension,
       opcionMenu,
     });
@@ -127,16 +135,20 @@ export class ConsumosService {
 
     let nuevaOpcionMenu = consumo.opcionMenu;
 
-    if (updateConsumoDto.idOpcionMenu) {
-      const opcionMenu = await this.opcionMenuRepository.findOne({
-        where: { id: updateConsumoDto.idOpcionMenu },
-      });
+    if (updateConsumoDto.idOpcionMenu !== undefined) {
+      if (updateConsumoDto.idOpcionMenu) {
+        const opcionMenu = await this.opcionMenuRepository.findOne({
+          where: { id: updateConsumoDto.idOpcionMenu },
+        });
 
-      if (!opcionMenu) {
-        throw new NotFoundException('Opción de menú no encontrada');
+        if (!opcionMenu) {
+          throw new NotFoundException('Opción de menú no encontrada');
+        }
+
+        nuevaOpcionMenu = opcionMenu;
+      } else {
+        nuevaOpcionMenu = undefined as any;
       }
-
-      nuevaOpcionMenu = opcionMenu;
     }
 
     if (nuevaPension.id === pensionAnterior.id) {
@@ -175,6 +187,14 @@ export class ConsumosService {
 
     if (updateConsumoDto.tipoConsumo) {
       consumo.tipoConsumo = updateConsumoDto.tipoConsumo;
+    }
+
+    if (updateConsumoDto.tipoPlato !== undefined) {
+      consumo.tipoPlato = updateConsumoDto.tipoPlato;
+    }
+
+    if (updateConsumoDto.estadoEntrega) {
+      consumo.estadoEntrega = updateConsumoDto.estadoEntrega;
     }
 
     consumo.cantidadCompletos = nuevaCantidad;

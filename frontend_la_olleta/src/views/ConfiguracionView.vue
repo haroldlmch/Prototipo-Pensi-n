@@ -287,6 +287,7 @@ onMounted(() => {
               <InputText
                 v-model="wsTargetGroup"
                 placeholder="Ej: 120363293340256520@g.us (Vacío = todos)"
+                maxlength="100"
                 style="flex: 1; font-size: 0.85rem;"
               />
               <Button
@@ -316,8 +317,8 @@ onMounted(() => {
                    <code>#pedido [platos]</code> <span style="font-size: 0.75rem; color: #16a34a; font-weight: 600;">(Realizar Pedido)</span>
                 </div>
                 <div style="color: #64748b; font-size: 0.78rem; line-height: 1.4;">
-                  • <em>Un plato:</em> <code>#pedido 1</code> o <code>#pedido saice</code><br />
-                  • <em>Múltiples platos:</em> <code>#pedido 2 chuletas, 1 saice, 3 sopas</code>
+                  • <em>Solo Segundo (por defecto):</em> <code>#pedido 1 chuleta</code> o <code>#pedido 2 saice</code><br />
+                  • <em>Con Sopa (Completo):</em> <code>#pedido 1 completo chuleta</code> o <code>#pedido 2 saice, 2 sopas</code>
                 </div>
               </div>
 

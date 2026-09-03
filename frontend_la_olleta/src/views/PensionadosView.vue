@@ -205,16 +205,32 @@ const editarPensionado = (pensionado: Pensionado) => {
 };
 
 const guardarPensionado = async () => {
-  if (!nombreCompleto.value.trim()) {
-    errorMensaje.value = 'El nombre completo es obligatorio';
+  const nombre = nombreCompleto.value.trim();
+  if (!nombre) {
+    errorMensaje.value = 'El nombre completo es obligatorio.';
+    return;
+  }
+  if (nombre.length < 3) {
+    errorMensaje.value = 'El nombre completo debe tener al menos 3 caracteres.';
+    return;
+  }
+  if (nombre.length > 150) {
+    errorMensaje.value = 'El nombre completo no puede superar los 150 caracteres.';
+    return;
+  }
+
+  const tel = telefono.value.trim();
+  if (tel && tel.length > 20) {
+    errorMensaje.value = 'El número de teléfono no puede superar los 20 caracteres.';
     return;
   }
 
   guardando.value = true;
+  errorMensaje.value = '';
   try {
     const payload = {
-      nombreCompleto: nombreCompleto.value.trim(),
-      telefono: telefono.value.trim() || undefined,
+      nombreCompleto: nombre,
+      telefono: tel || undefined,
       estado: estado.value,
     };
 
@@ -228,8 +244,8 @@ const guardarPensionado = async () => {
     limpiarFormulario();
     await cargarPensionados();
   } catch (error: any) {
-    errorMensaje.value =
-      error.response?.data?.message || 'Error al guardar pensionado';
+    const msg = error.response?.data?.message;
+    errorMensaje.value = Array.isArray(msg) ? msg.join('. ') : (msg || 'Error al guardar pensionado.');
   } finally {
     guardando.value = false;
   }
@@ -772,6 +788,7 @@ onMounted(() => {
           <InputText
             v-model="nombreCompleto"
             placeholder="Ej: Juan Pérez Morales"
+            maxlength="150"
             style="padding: 0.75rem 1rem;"
             fluid
           />
@@ -782,6 +799,7 @@ onMounted(() => {
           <InputText
             v-model="telefono"
             placeholder="Ej: 71234567"
+            maxlength="20"
             style="padding: 0.75rem 1rem;"
             fluid
           />

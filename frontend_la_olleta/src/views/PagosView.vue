@@ -12,6 +12,7 @@ import Message from 'primevue/message';
 import Select from 'primevue/select';
 
 import api from '../api/axios';
+import ModalFacturaTicket, { type ComprobanteData } from '../components/ModalFacturaTicket.vue';
 
 interface Pensionado {
   id: number;
@@ -46,6 +47,8 @@ const pensiones = ref<Pension[]>([]);
 const busquedaPensionado = ref('');
 const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
+const mostrarComprobante = ref(false);
+const comprobanteActual = ref<ComprobanteData | null>(null);
 
 const pagosFiltrados = computed(() => {
   const busqueda = busquedaPensionado.value.trim().toLowerCase();
@@ -220,21 +223,80 @@ const guardarPago = async () => {
     cantidadCompletos: Number(cantidadCompletosRecarga.value) || undefined,
   };
 
-  try {
-    if (modoEdicion.value) {
-      await api.patch(`/pagos/${pagoId.value}`, payload);
-    } else {
-      await api.post('/pagos', payload);
-    }
+    const pSel = pensiones.value.find((p) => p.id === Number(idPension.value));
+    const nombreCliente = pSel?.pensionado?.nombreCompleto || 'Pensionado';
+    const cantPlatos = Number(cantidadCompletosRecarga.value) || 1;
+    const precio = Number(precioUnitario.value);
+    const total = Number(montoTotal.value);
+    const fPago = formatearFecha(fechaPago.value);
+    const mPago = metodoPago.value;
 
-    visible.value = false;
-    limpiarFormulario();
-    await cargarDatos();
-  } catch (error) {
-    errorMensaje.value = obtenerMensajeError(error);
-  } finally {
-    guardando.value = false;
-  }
+    try {
+      if (modoEdicion.value) {
+        await api.patch(`/pagos/${pagoId.value}`, payload);
+      } else {
+        await api.post('/pagos', payload);
+      }
+
+      visible.value = false;
+      limpiarFormulario();
+      await cargarDatos();
+
+      comprobanteActual.value = {
+        tipo: 'PENSION',
+        numeroComprobante: `PAG-${(pagos.value[0]?.id || 1).toString().padStart(5, '0')}`,
+        fecha: fPago,
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        clienteNombre: nombreCliente,
+        clienteNitCi: 'S/N',
+        items: [
+          {
+            descripcion: `Pago / Recarga de Pensión (${cantPlatos} almuerzos)`,
+            cantidad: cantPlatos,
+            precioUnitario: precio,
+            subtotal: total,
+          },
+        ],
+        montoTotal: total,
+        metodoPago: mPago,
+        saldoRestante: pSel?.completosDisponibles,
+      };
+      mostrarComprobante.value = true;
+    } catch (error) {
+      errorMensaje.value = obtenerMensajeError(error);
+    } finally {
+      guardando.value = false;
+    }
+};
+
+const abrirComprobantePago = (pago: Pago) => {
+  const nombreCliente = pago.pension?.pensionado?.nombreCompleto || 'Pensionado';
+  const cantPlatos = Number(pago.cantidadCompletos) || (Number(pago.montoTotal) / Number(pago.precioUnitario)) || 1;
+  const precio = Number(pago.precioUnitario) || 15;
+  const total = Number(pago.montoTotal) || (cantPlatos * precio);
+  const fPago = formatearFecha(pago.fechaPago);
+  const hPago = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  comprobanteActual.value = {
+    tipo: 'PENSION',
+    numeroComprobante: `PAG-${pago.id.toString().padStart(5, '0')}`,
+    fecha: fPago,
+    hora: hPago,
+    clienteNombre: nombreCliente,
+    clienteNitCi: 'S/N',
+    items: [
+      {
+        descripcion: `Recarga de Pensión #${pago.pension?.id || ''} (${cantPlatos} almuerzos)`,
+        cantidad: cantPlatos,
+        precioUnitario: precio,
+        subtotal: total,
+      },
+    ],
+    montoTotal: total,
+    metodoPago: pago.metodoPago || 'Efectivo',
+    saldoRestante: pago.pension?.completosDisponibles,
+  };
+  mostrarComprobante.value = true;
 };
 
 const confirmarEliminar = (id: number) => {
@@ -484,8 +546,18 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 140px; text-align: center;">
+        <Column header="Acciones" style="width: 170px; text-align: center;">
           <template #body="slotProps">
+            <Button
+              icon="pi pi-receipt"
+              severity="help"
+              text
+              rounded
+              title="Ver / Imprimir Recibo o Factura"
+              style="margin-right: .25rem;"
+              @click="abrirComprobantePago(slotProps.data)"
+            />
+
             <Button
               icon="pi pi-pencil"
               severity="warning"
@@ -664,6 +736,12 @@ onMounted(async () => {
         </div>
       </div>
     </Dialog>
+
+    <!-- Modal Comprobante / Factura / Ticket -->
+    <ModalFacturaTicket
+      v-model:visible="mostrarComprobante"
+      :comprobante="comprobanteActual"
+    />
   </div>
 </template>
 

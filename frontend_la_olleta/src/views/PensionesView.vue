@@ -13,10 +13,13 @@ import Checkbox from 'primevue/checkbox';
 import Message from 'primevue/message';
 
 import api from '../api/axios';
+import ModalFacturaTicket, { type ComprobanteData } from '../components/ModalFacturaTicket.vue';
 
 const pensiones = ref<any[]>([]);
 const pensionados = ref<any[]>([]);
 const busquedaPensionado = ref('');
+const mostrarComprobante = ref(false);
+const comprobanteActual = ref<ComprobanteData | null>(null);
 
 const pensioneFiltradas = computed(() => {
   if (!busquedaPensionado.value.trim()) return pensiones.value;
@@ -360,6 +363,27 @@ const guardarRecargaPlatos = async () => {
 
     visibleRecarga.value = false;
     await cargarPensiones();
+
+    comprobanteActual.value = {
+      tipo: 'PENSION',
+      numeroComprobante: `REC-${p.id.toString().padStart(5, '0')}`,
+      fecha: formatFecha(hoyStr),
+      hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      clienteNombre: p.pensionado?.nombreCompleto || 'Pensionado',
+      clienteNitCi: 'S/N',
+      items: [
+        {
+          descripcion: `Recarga adicional (${cant} almuerzos)`,
+          cantidad: cant,
+          precioUnitario: precio,
+          subtotal: cant * precio,
+        },
+      ],
+      montoTotal: cant * precio,
+      metodoPago: 'Efectivo',
+      saldoRestante: nuevoDisponibles,
+    };
+    mostrarComprobante.value = true;
   } catch (error: any) {
     errorMensajeRecarga.value = error.response?.data?.message || 'Error al agregar platos a la pensión';
   } finally {
@@ -421,6 +445,37 @@ watch([cantidadCompletosPago, precioUnitario], () => {
   montoTotal.value = Number(cantidadCompletosPago.value) * Number(precioUnitario.value);
 });
 
+const abrirComprobantePension = (pension: any, pagoEspecifico?: any) => {
+  const nombreCliente = pension.pensionado?.nombreCompleto || 'Pensionado';
+  const platos = pagoEspecifico?.cantidadCompletos || pension.cantidadCompletos || 1;
+  const pUnit = Number(pagoEspecifico?.precioUnitario || precioPensionadoSugerido.value || 15);
+  const total = Number(pagoEspecifico?.montoTotal || platos * pUnit);
+  const idComp = pagoEspecifico?.id ? `PAG-${pagoEspecifico.id.toString().padStart(5, '0')}` : `PEN-${pension.id.toString().padStart(5, '0')}`;
+  const fPago = pagoEspecifico?.fechaPago ? formatFecha(pagoEspecifico.fechaPago) : formatFecha(pension.fechaInicio || new Date());
+  const hPago = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  comprobanteActual.value = {
+    tipo: 'PENSION',
+    numeroComprobante: idComp,
+    fecha: fPago,
+    hora: hPago,
+    clienteNombre: nombreCliente,
+    clienteNitCi: 'S/N',
+    items: [
+      {
+        descripcion: `Recarga de Pensión (${platos} almuerzos)`,
+        cantidad: platos,
+        precioUnitario: pUnit,
+        subtotal: total,
+      },
+    ],
+    montoTotal: total,
+    metodoPago: pagoEspecifico?.metodoPago || 'Efectivo',
+    saldoRestante: pension.completosDisponibles,
+  };
+  mostrarComprobante.value = true;
+};
+
 const guardarPago = async () => {
   if (!formularioPagoValido.value) {
     errorMensajePago.value = 'Complete todos los campos requeridos.';
@@ -461,10 +516,33 @@ const guardarPago = async () => {
 
       await api.post('/pagos', payloadPago);
 
+      const nomCliente = pensionSeleccionadaParaPago.value?.pensionado?.nombreCompleto || 'Pensionado';
+
       pensionPendienteCreacion.value = null;
       visiblePago.value = false;
       limpiarFormulario();
       await cargarPensiones();
+
+      comprobanteActual.value = {
+        tipo: 'PENSION',
+        numeroComprobante: `PEN-${nuevaPensionId.toString().padStart(5, '0')}`,
+        fecha: formatFecha(fechaPago.value),
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        clienteNombre: nomCliente,
+        clienteNitCi: 'S/N',
+        items: [
+          {
+            descripcion: `Pensión - Activación (${compradosFinal} almuerzos)` + (saldoExtra > 0 ? ` + ${saldoExtra} traspaso` : ''),
+            cantidad: totalPlatos,
+            precioUnitario: Number(precioUnitario.value),
+            subtotal: Number(montoTotal.value),
+          },
+        ],
+        montoTotal: Number(montoTotal.value),
+        metodoPago: metodoPago.value,
+        saldoRestante: totalPlatos,
+      };
+      mostrarComprobante.value = true;
     } else if (idPensionPago.value) {
       // Pago para pensión ya existente
       const payload = {
@@ -477,8 +555,29 @@ const guardarPago = async () => {
       };
 
       await api.post('/pagos', payload);
+      const nomCliente = pensionSeleccionadaParaPago.value?.pensionado?.nombreCompleto || 'Pensionado';
       visiblePago.value = false;
       await cargarPensiones();
+
+      comprobanteActual.value = {
+        tipo: 'PENSION',
+        numeroComprobante: `PEN-${idPensionPago.value.toString().padStart(5, '0')}`,
+        fecha: formatFecha(fechaPago.value),
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        clienteNombre: nomCliente,
+        clienteNitCi: 'S/N',
+        items: [
+          {
+            descripcion: `Recarga de Pensión (${Number(cantidadCompletosPago.value) || 1} almuerzos)`,
+            cantidad: Number(cantidadCompletosPago.value) || 1,
+            precioUnitario: Number(precioUnitario.value),
+            subtotal: Number(montoTotal.value),
+          },
+        ],
+        montoTotal: Number(montoTotal.value),
+        metodoPago: metodoPago.value,
+      };
+      mostrarComprobante.value = true;
     }
   } catch (error: any) {
     console.error(error);
@@ -629,15 +728,25 @@ onMounted(async () => {
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 150px; text-align: center;">
+        <Column header="Acciones" style="width: 180px; text-align: center;">
           <template #body="slotProps">
+            <Button
+              icon="pi pi-receipt"
+              severity="help"
+              text
+              rounded
+              title="Ver / Imprimir Recibo o Factura"
+              style="margin-right: .25rem;"
+              @click="abrirComprobantePension(slotProps.data)"
+            />
+
             <Button
               icon="pi pi-refresh"
               severity="info"
               text
               rounded
               title="Renovar Pensión (Acumular saldo restante)"
-              style="margin-right: .25rem"
+              style="margin-right: .25rem;"
               @click="renovarPension(slotProps.data)"
             />
 
@@ -647,7 +756,7 @@ onMounted(async () => {
               text
               rounded
               title="Editar Pensión"
-              style="margin-right: .25rem"
+              style="margin-right: .25rem;"
               @click="editarPension(slotProps.data)"
             />
 
@@ -1070,5 +1179,11 @@ onMounted(async () => {
         />
       </div>
     </Dialog>
+
+    <!-- Modal Comprobante / Factura / Ticket -->
+    <ModalFacturaTicket
+      v-model:visible="mostrarComprobante"
+      :comprobante="comprobanteActual"
+    />
   </div>
 </template>

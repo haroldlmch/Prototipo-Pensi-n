@@ -12,6 +12,7 @@ import Select from 'primevue/select';
 import Tag from 'primevue/tag';
 
 import api from '../api/axios';
+import ModalFacturaTicket, { type ComprobanteData } from '../components/ModalFacturaTicket.vue';
 
 interface VentaCasual {
   id: number;
@@ -32,6 +33,8 @@ const todasLasOpciones = ref<{ id: number; nombreSegundo: string }[]>([]);
 const busquedaFecha = ref<Date | null>(null);
 const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
+const mostrarComprobante = ref(false);
+const comprobanteActual = ref<ComprobanteData | null>(null);
 
 type TipoPlato = 'Completo' | 'Solo Segundo' | 'Solo Sopa';
 const tiposPlato: TipoPlato[] = ['Completo', 'Solo Segundo', 'Solo Sopa'];
@@ -274,6 +277,20 @@ const guardarVenta = async () => {
     guardando.value = true;
     errorMensaje.value = '';
 
+    const itemsParaComprobante = platosVentaForm.value.map((item) => {
+      const opc = todasLasOpciones.value.find((o) => o.id === item.idOpcionMenu);
+      const nombre = opc?.nombreSegundo || (item.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
+      return {
+        descripcion: `${nombre} (${item.tipoPlato || 'Completo'})`,
+        cantidad: Number(item.cantidad),
+        precioUnitario: precio,
+        subtotal: Number(item.cantidad) * precio,
+      };
+    });
+    const montoCobrado = totalMontoCalculado.value;
+    const metodoUsado = metodoPago.value;
+    const fechaVentaStr = formatearFecha(fecha.value);
+
     try {
       for (const item of platosVentaForm.value) {
         await api.post('/ventas-casuales', {
@@ -290,12 +307,54 @@ const guardarVenta = async () => {
       visible.value = false;
       limpiarFormulario();
       await cargarVentas();
+
+      comprobanteActual.value = {
+        tipo: 'VENTA_CASUAL',
+        numeroComprobante: `VEN-${(ventas.value[0]?.id || 1).toString().padStart(5, '0')}`,
+        fecha: fechaVentaStr,
+        hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        clienteNombre: 'Cliente Casual',
+        clienteNitCi: 'S/N',
+        items: itemsParaComprobante,
+        montoTotal: montoCobrado,
+        metodoPago: metodoUsado,
+      };
+      mostrarComprobante.value = true;
     } catch (error) {
       errorMensaje.value = obtenerMensajeError(error);
     } finally {
       guardando.value = false;
     }
   }
+};
+
+const abrirComprobanteVenta = (venta: VentaCasual) => {
+  const nombrePlato =
+    venta.opcionMenu?.nombreSegundo ||
+    (venta.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
+  const desc = `${nombrePlato} (${venta.tipoPlato || 'Completo'})`;
+  const fVenta = formatearFecha(venta.fecha);
+  const hVenta = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  comprobanteActual.value = {
+    tipo: 'VENTA_CASUAL',
+    numeroComprobante: `VEN-${venta.id.toString().padStart(5, '0')}`,
+    fecha: fVenta,
+    hora: hVenta,
+    clienteNombre: 'Cliente Casual',
+    clienteNitCi: 'S/N',
+    items: [
+      {
+        descripcion: desc,
+        cantidad: venta.cantidadCompletos,
+        precioUnitario: Number(venta.precioUnitario),
+        subtotal: Number(venta.montoTotal),
+      },
+    ],
+    montoTotal: Number(venta.montoTotal),
+    metodoPago: venta.metodoPago || 'Efectivo',
+  };
+  mostrarComprobante.value = true;
 };
 
 const confirmarEliminar = (id: number) => {
@@ -521,8 +580,18 @@ onMounted(cargarVentas);
           </template>
         </Column>
 
-        <Column header="Acciones" style="width: 140px; text-align: center;">
+        <Column header="Acciones" style="width: 170px; text-align: center;">
           <template #body="slotProps">
+            <Button
+              icon="pi pi-receipt"
+              severity="help"
+              text
+              rounded
+              title="Ver / Imprimir Ticket o Factura"
+              style="margin-right: .25rem;"
+              @click="abrirComprobanteVenta(slotProps.data)"
+            />
+
             <Button
               icon="pi pi-pencil"
               severity="warning"
@@ -863,6 +932,12 @@ onMounted(cargarVentas);
         </div>
       </div>
     </Dialog>
+
+    <!-- Modal Comprobante / Factura / Ticket -->
+    <ModalFacturaTicket
+      v-model:visible="mostrarComprobante"
+      :comprobante="comprobanteActual"
+    />
   </div>
 </template>
 

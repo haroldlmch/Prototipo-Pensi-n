@@ -32,6 +32,8 @@ interface Pension {
 interface OpcionMenu {
   id: number;
   nombreSegundo: string;
+  cantidadInicial?: number;
+  cantidadDisponible?: number;
 }
 
 interface MenuHoy {
@@ -646,6 +648,7 @@ onMounted(() => {
                   cursor: pointer;
                   display: flex;
                   align-items: center;
+                  justify-content: space-between;
                   gap: 0.5rem;
                   transition: all 0.15s ease;
                 "
@@ -656,11 +659,21 @@ onMounted(() => {
                 "
                 @click="opcionRapidaSeleccionada = op"
               >
-                <i
-                  :class="opcionRapidaSeleccionada?.id === op.id ? 'pi pi-check-circle' : 'pi pi-circle'"
-                  :style="opcionRapidaSeleccionada?.id === op.id ? 'color: #ea580c;' : 'color: #a8a29e;'"
-                ></i>
-                <span style="color: #292524; font-size: 0.9rem;">{{ op.nombreSegundo }}</span>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <i
+                    :class="opcionRapidaSeleccionada?.id === op.id ? 'pi pi-check-circle' : 'pi pi-circle'"
+                    :style="opcionRapidaSeleccionada?.id === op.id ? 'color: #ea580c;' : 'color: #a8a29e;'"
+                  ></i>
+                  <span style="color: #292524; font-size: 0.9rem;">{{ op.nombreSegundo }}</span>
+                </div>
+
+                <Tag
+                  v-if="op.cantidadInicial && op.cantidadInicial > 0"
+                  :severity="(op.cantidadDisponible || 0) <= 0 ? 'danger' : (op.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                  :value="(op.cantidadDisponible || 0) <= 0 ? 'Agotado' : `${op.cantidadDisponible} disp.`"
+                  rounded
+                  style="font-size: 0.72rem;"
+                />
               </div>
             </div>
 
@@ -813,7 +826,6 @@ onMounted(() => {
               v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
               value="Solo Sopa"
               rounded
-              icon="pi pi-sparkles"
               style="font-size: 0.78rem; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;"
             />
             <Tag
@@ -1026,7 +1038,20 @@ onMounted(() => {
                 optionValue="id"
                 placeholder="Seleccione el plato..."
                 fluid
-              />
+              >
+                <template #option="slotProps">
+                  <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span>{{ slotProps.option.nombreSegundo }}</span>
+                    <Tag
+                      v-if="slotProps.option.cantidadInicial && slotProps.option.cantidadInicial > 0"
+                      :severity="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'danger' : (slotProps.option.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                      :value="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'Agotado' : `${slotProps.option.cantidadDisponible} disp.`"
+                      rounded
+                      style="font-size: 0.72rem;"
+                    />
+                  </div>
+                </template>
+              </Select>
               <div
                 v-else
                 style="
@@ -1042,7 +1067,6 @@ onMounted(() => {
                   gap: 0.4rem;
                 "
               >
-                <i class="pi pi-sparkles"></i>
                 <span>Sopa del Día (Sin segundo)</span>
               </div>
             </div>
@@ -1115,7 +1139,20 @@ onMounted(() => {
                   optionValue="id"
                   placeholder="Seleccione segundo..."
                   fluid
-                />
+                >
+                  <template #option="slotProps">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span>{{ slotProps.option.nombreSegundo }}</span>
+                      <Tag
+                        v-if="slotProps.option.cantidadInicial && slotProps.option.cantidadInicial > 0"
+                        :severity="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'danger' : (slotProps.option.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                        :value="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'Agotado' : `${slotProps.option.cantidadDisponible} disp.`"
+                        rounded
+                        style="font-size: 0.72rem;"
+                      />
+                    </div>
+                  </template>
+                </Select>
                 <div
                   v-else
                   style="
@@ -1131,7 +1168,6 @@ onMounted(() => {
                     gap: 0.4rem;
                   "
                 >
-                  <i class="pi pi-sparkles"></i>
                   <span>Sopa del Día</span>
                 </div>
               </div>

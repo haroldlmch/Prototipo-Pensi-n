@@ -13,6 +13,8 @@ interface Configuracion {
   id: number;
   precioPensionado: number | string;
   precioCasual: number | string;
+  precioCasualSegundo?: number | string;
+  precioCasualSopa?: number | string;
   saldoBajoAlerta: number;
   fechaActualizacion?: string;
 }
@@ -20,6 +22,8 @@ interface Configuracion {
 const configuracionId = ref<number | null>(null);
 const precioPensionado = ref<number | null>(null);
 const precioCasual = ref<number | null>(null);
+const precioCasualSegundo = ref<number | null>(null);
+const precioCasualSopa = ref<number | null>(null);
 const saldoBajoAlerta = ref<number | null>(null);
 const fechaActualizacion = ref('');
 
@@ -41,6 +45,10 @@ const formularioValido = computed(
     precioPensionado.value >= 0 &&
     precioCasual.value !== null &&
     precioCasual.value >= 0 &&
+    precioCasualSegundo.value !== null &&
+    precioCasualSegundo.value >= 0 &&
+    precioCasualSopa.value !== null &&
+    precioCasualSopa.value >= 0 &&
     saldoBajoAlerta.value !== null &&
     saldoBajoAlerta.value >= 0,
 );
@@ -68,6 +76,8 @@ const cargarConfiguracion = async () => {
     configuracionId.value = datos.id;
     precioPensionado.value = Number(datos.precioPensionado);
     precioCasual.value = Number(datos.precioCasual);
+    precioCasualSegundo.value = datos.precioCasualSegundo !== undefined ? Number(datos.precioCasualSegundo) : 15;
+    precioCasualSopa.value = datos.precioCasualSopa !== undefined ? Number(datos.precioCasualSopa) : 10;
     saldoBajoAlerta.value = datos.saldoBajoAlerta;
     fechaActualizacion.value = datos.fechaActualizacion ?? '';
   } catch (error) {
@@ -92,6 +102,8 @@ const guardarConfiguracion = async () => {
     const response = await api.patch(`/configuracion/${configuracionId.value}`, {
       precioPensionado: Number(precioPensionado.value),
       precioCasual: Number(precioCasual.value),
+      precioCasualSegundo: Number(precioCasualSegundo.value),
+      precioCasualSopa: Number(precioCasualSopa.value),
       saldoBajoAlerta: Number(saldoBajoAlerta.value),
     });
 
@@ -207,9 +219,33 @@ onMounted(() => {
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 0.4rem;">
-            <label class="campo-label">Precio para venta casual</label>
+            <label class="campo-label">Precio venta casual - Almuerzo Completo</label>
             <InputNumber
               v-model="precioCasual"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Precio venta casual - Solo Segundo</label>
+            <InputNumber
+              v-model="precioCasualSegundo"
+              mode="currency"
+              currency="BOB"
+              locale="es-BO"
+              :min="0"
+              fluid
+            />
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+            <label class="campo-label">Precio venta casual - Solo Sopa</label>
+            <InputNumber
+              v-model="precioCasualSopa"
               mode="currency"
               currency="BOB"
               locale="es-BO"

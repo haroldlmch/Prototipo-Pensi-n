@@ -13,6 +13,14 @@ export class CreateConfiguracionDto {
   @Min(0, { message: 'El precio para venta casual no puede ser negativo.' })
   precioCasual!: number;
 
+  @IsNumber({}, { message: 'El precio para venta casual (solo segundo) debe ser un número válido.' })
+  @Min(0, { message: 'El precio para venta casual (solo segundo) no puede ser negativo.' })
+  precioCasualSegundo!: number;
+
+  @IsNumber({}, { message: 'El precio para venta casual (solo sopa) debe ser un número válido.' })
+  @Min(0, { message: 'El precio para venta casual (solo sopa) no puede ser negativo.' })
+  precioCasualSopa!: number;
+
   @IsNumber({}, { message: 'El precio extra debe ser un número válido.' })
   @Min(0, { message: 'El precio extra no puede ser negativo.' })
   precioExtra!: number;

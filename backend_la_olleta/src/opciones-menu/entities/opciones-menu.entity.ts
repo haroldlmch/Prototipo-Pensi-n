@@ -13,6 +13,20 @@ export class OpcionesMenu {
   })
   nombreSegundo!: string;
 
+  @Column('integer', {
+    name: 'cantidad_inicial',
+    nullable: true,
+    default: 0,
+  })
+  cantidadInicial?: number;
+
+  @Column('integer', {
+    name: 'cantidad_disponible',
+    nullable: true,
+    default: 0,
+  })
+  cantidadDisponible?: number;
+
    @OneToMany(
   () => Consumo,
   (consumo) => consumo.opcionMenu,

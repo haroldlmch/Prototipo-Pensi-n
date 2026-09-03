@@ -5,9 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Consumo } from './entities/consumo.entity';
 import { Pensione } from 'src/pensiones/entities/pensione.entity';
 import { OpcionesMenu } from 'src/opciones-menu/entities/opciones-menu.entity';
+import { Menu } from 'src/menus/entities/menu.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Consumo, Pensione, OpcionesMenu])],
+  imports: [TypeOrmModule.forFeature([Consumo, Pensione, OpcionesMenu, Menu])],
   controllers: [ConsumosController],
   providers: [ConsumosService],
   exports: [ConsumosService],

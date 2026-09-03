@@ -28,8 +28,15 @@ interface VentaCasual {
   };
 }
 
+interface OpcionMenuStock {
+  id: number;
+  nombreSegundo: string;
+  cantidadInicial?: number;
+  cantidadDisponible?: number;
+}
+
 const ventas = ref<VentaCasual[]>([]);
-const todasLasOpciones = ref<{ id: number; nombreSegundo: string }[]>([]);
+const todasLasOpciones = ref<OpcionMenuStock[]>([]);
 const busquedaFecha = ref<Date | null>(null);
 const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
@@ -78,10 +85,22 @@ const cantidadCompletos = ref<number | null>(1);
 const precioUnitario = ref<number | null>(null);
 const montoTotal = ref<number | null>(null);
 
+const precioCasualCompleto = ref<number>(18);
+const precioCasualSegundo = ref<number>(15);
+const precioCasualSopa = ref<number>(10);
+const precioCasualSugerido = ref<number | null>(null);
+
+const obtenerPrecioPorTipo = (tipo: TipoPlato): number => {
+  if (tipo === 'Solo Sopa') return precioCasualSopa.value;
+  if (tipo === 'Solo Segundo') return precioCasualSegundo.value;
+  return precioCasualCompleto.value;
+};
+
 interface ItemPlatoVenta {
   idOpcionMenu: number | null;
   tipoPlato: TipoPlato;
   cantidad: number;
+  precioUnitario: number;
 }
 
 const platosVentaForm = ref<ItemPlatoVenta[]>([]);
@@ -89,10 +108,12 @@ const platosVentaForm = ref<ItemPlatoVenta[]>([]);
 const agregarPlatoVenta = () => {
   const defaultId =
     todasLasOpciones.value.length > 0 ? (todasLasOpciones.value[0]?.id ?? null) : null;
+  const precio = obtenerPrecioPorTipo('Completo');
   platosVentaForm.value.push({
     idOpcionMenu: defaultId,
     tipoPlato: 'Completo',
     cantidad: 1,
+    precioUnitario: precio,
   });
 };
 
@@ -102,14 +123,28 @@ const quitarPlatoVenta = (index: number) => {
   }
 };
 
+const onTipoPlatoChange = (item: ItemPlatoVenta) => {
+  item.precioUnitario = obtenerPrecioPorTipo(item.tipoPlato);
+};
+
+const onTipoPlatoFormChange = () => {
+  precioUnitario.value = obtenerPrecioPorTipo(tipoPlatoForm.value);
+};
+
 const totalPlatosVenta = computed(() => {
   if (modoEdicion.value) return Number(cantidadCompletos.value) || 1;
   return platosVentaForm.value.reduce((sum, item) => sum + (Number(item.cantidad) || 0), 0);
 });
 
 const totalMontoCalculado = computed(() => {
-  const precio = Number(precioUnitario.value) || 0;
-  return totalPlatosVenta.value * precio;
+  if (modoEdicion.value) {
+    return (Number(cantidadCompletos.value) || 0) * (Number(precioUnitario.value) || 0);
+  }
+  return platosVentaForm.value.reduce((sum, item) => {
+    const cant = Number(item.cantidad) || 0;
+    const precio = item.precioUnitario !== undefined ? Number(item.precioUnitario) : obtenerPrecioPorTipo(item.tipoPlato);
+    return sum + cant * precio;
+  }, 0);
 });
 
 const formularioValido = computed(() => {
@@ -125,8 +160,7 @@ const formularioValido = computed(() => {
   return (
     Boolean(fecha.value) &&
     platosVentaForm.value.length > 0 &&
-    precioUnitario.value !== null &&
-    precioUnitario.value >= 0
+    platosVentaForm.value.every((p) => p.precioUnitario !== null && p.precioUnitario >= 0 && p.cantidad >= 1)
   );
 });
 
@@ -146,8 +180,6 @@ const obtenerMensajeError = (error: unknown) => {
 
 const convertirFechaISO = (valor: string) => valor.slice(0, 10);
 
-const precioCasualSugerido = ref<number | null>(null);
-
 const cargarVentas = async () => {
   cargando.value = true;
   errorMensaje.value = '';
@@ -161,7 +193,10 @@ const cargarVentas = async () => {
     ventas.value = ventasResponse.data;
     const config = Array.isArray(configResponse.data) ? configResponse.data[0] : configResponse.data;
     if (config) {
-      precioCasualSugerido.value = Number(config.precioCasual);
+      precioCasualCompleto.value = Number(config.precioCasual) || 18;
+      precioCasualSegundo.value = config.precioCasualSegundo !== undefined ? Number(config.precioCasualSegundo) : 15;
+      precioCasualSopa.value = config.precioCasualSopa !== undefined ? Number(config.precioCasualSopa) : 10;
+      precioCasualSugerido.value = precioCasualCompleto.value;
     }
 
     // Obtener menú de hoy para opciones de platos
@@ -186,19 +221,24 @@ const limpiarFormulario = () => {
   idOpcionMenu.value = defaultId;
   tipoPlatoForm.value = 'Completo';
   cantidadCompletos.value = 1;
-  precioUnitario.value = precioCasualSugerido.value || 18;
+  precioUnitario.value = precioCasualCompleto.value || 18;
   montoTotal.value = null;
   metodoPago.value = 'Efectivo';
-  platosVentaForm.value = [{ idOpcionMenu: defaultId, tipoPlato: 'Completo', cantidad: 1 }];
+  platosVentaForm.value = [
+    {
+      idOpcionMenu: defaultId,
+      tipoPlato: 'Completo',
+      cantidad: 1,
+      precioUnitario: precioCasualCompleto.value || 18,
+    },
+  ];
   modoEdicion.value = false;
   errorMensaje.value = '';
 };
 
 const nuevaVenta = () => {
   limpiarFormulario();
-  if (precioCasualSugerido.value !== null) {
-    precioUnitario.value = precioCasualSugerido.value;
-  }
+  precioUnitario.value = precioCasualCompleto.value;
   visible.value = true;
 };
 
@@ -270,9 +310,11 @@ const guardarVenta = async () => {
         errorMensaje.value = `Indique una cantidad válida en la fila #${i + 1}.`;
         return;
       }
+      if (item.precioUnitario === undefined || item.precioUnitario === null || item.precioUnitario < 0) {
+        errorMensaje.value = `Indique un precio unitario válido en la fila #${i + 1}.`;
+        return;
+      }
     }
-
-    const precio = Number(precioUnitario.value) || 0;
 
     guardando.value = true;
     errorMensaje.value = '';
@@ -280,11 +322,12 @@ const guardarVenta = async () => {
     const itemsParaComprobante = platosVentaForm.value.map((item) => {
       const opc = todasLasOpciones.value.find((o) => o.id === item.idOpcionMenu);
       const nombre = opc?.nombreSegundo || (item.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
+      const precioItem = Number(item.precioUnitario) || obtenerPrecioPorTipo(item.tipoPlato);
       return {
         descripcion: `${nombre} (${item.tipoPlato || 'Completo'})`,
         cantidad: Number(item.cantidad),
-        precioUnitario: precio,
-        subtotal: Number(item.cantidad) * precio,
+        precioUnitario: precioItem,
+        subtotal: Number(item.cantidad) * precioItem,
       };
     });
     const montoCobrado = totalMontoCalculado.value;
@@ -293,13 +336,14 @@ const guardarVenta = async () => {
 
     try {
       for (const item of platosVentaForm.value) {
+        const precioItem = Number(item.precioUnitario) || obtenerPrecioPorTipo(item.tipoPlato);
         await api.post('/ventas-casuales', {
           fecha: convertirFechaISO(fecha.value),
           idOpcionMenu: item.tipoPlato === 'Solo Sopa' ? undefined : item.idOpcionMenu,
           tipoPlato: item.tipoPlato || 'Completo',
           cantidadCompletos: Number(item.cantidad),
-          precioUnitario: precio,
-          montoTotal: Number(item.cantidad) * precio,
+          precioUnitario: precioItem,
+          montoTotal: Number(item.cantidad) * precioItem,
           metodoPago: metodoPago.value,
         });
       }
@@ -522,7 +566,6 @@ onMounted(cargarVentas);
               v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
               value="Solo Sopa"
               rounded
-              icon="pi pi-sparkles"
               style="font-size: 0.78rem; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;"
             />
             <Tag
@@ -680,7 +723,20 @@ onMounted(cargarVentas);
                 optionValue="id"
                 placeholder="Seleccione el plato del día..."
                 fluid
-              />
+              >
+                <template #option="slotProps">
+                  <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <span>{{ slotProps.option.nombreSegundo }}</span>
+                    <Tag
+                      v-if="slotProps.option.cantidadInicial && slotProps.option.cantidadInicial > 0"
+                      :severity="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'danger' : (slotProps.option.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                      :value="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'Agotado' : `${slotProps.option.cantidadDisponible} disp.`"
+                      rounded
+                      style="font-size: 0.72rem;"
+                    />
+                  </div>
+                </template>
+              </Select>
               <div
                 v-else
                 style="
@@ -696,7 +752,6 @@ onMounted(cargarVentas);
                   gap: 0.4rem;
                 "
               >
-                <i class="pi pi-sparkles"></i>
                 <span>Sopa del Día (Sin segundo)</span>
               </div>
             </div>
@@ -706,6 +761,7 @@ onMounted(cargarVentas);
               <Select
                 v-model="tipoPlatoForm"
                 :options="tiposPlato"
+                @change="onTipoPlatoFormChange"
                 fluid
               />
             </div>
@@ -724,14 +780,22 @@ onMounted(cargarVentas);
 
             <div style="display: flex; flex-direction: column; gap: 0.4rem;">
               <label style="font-weight: 700; color: #334155; font-size: 0.85rem;">Precio Unitario</label>
-              <InputNumber
-                v-model="precioUnitario"
-                mode="currency"
-                currency="BOB"
-                locale="es-BO"
-                :min="0"
-                fluid
-              />
+              <div
+                style="
+                  padding: 0.65rem 0.85rem;
+                  background: #f1f5f9;
+                  border: 1px solid #cbd5e1;
+                  border-radius: 8px;
+                  color: #1e293b;
+                  font-weight: 800;
+                  font-size: 0.95rem;
+                  display: flex;
+                  align-items: center;
+                  box-sizing: border-box;
+                "
+              >
+                {{ formatearMonto(precioUnitario || 0) }}
+              </div>
             </div>
           </div>
         </div>
@@ -756,7 +820,8 @@ onMounted(cargarVentas);
           <!-- Cabeceras de columnas -->
           <div style="display: flex; gap: 0.75rem; padding: 0 0.5rem; font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase;">
             <div style="flex: 1.4;">Segundo del Menú</div>
-            <div style="width: 145px;">Tipo</div>
+            <div style="width: 140px;">Tipo</div>
+            <div style="width: 90px; text-align: center;">P. Unitario</div>
             <div style="width: 125px; text-align: center;">Cantidad</div>
             <div style="width: 36px;"></div>
           </div>
@@ -784,7 +849,20 @@ onMounted(cargarVentas);
                   optionValue="id"
                   placeholder="Seleccione segundo..."
                   fluid
-                />
+                >
+                  <template #option="slotProps">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <span>{{ slotProps.option.nombreSegundo }}</span>
+                      <Tag
+                        v-if="slotProps.option.cantidadInicial && slotProps.option.cantidadInicial > 0"
+                        :severity="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'danger' : (slotProps.option.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                        :value="(slotProps.option.cantidadDisponible || 0) <= 0 ? 'Agotado' : `${slotProps.option.cantidadDisponible} disp.`"
+                        rounded
+                        style="font-size: 0.72rem;"
+                      />
+                    </div>
+                  </template>
+                </Select>
                 <div
                   v-else
                   style="
@@ -800,28 +878,46 @@ onMounted(cargarVentas);
                     gap: 0.4rem;
                   "
                 >
-                  <i class="pi pi-sparkles"></i>
                   <span>Sopa del Día</span>
                 </div>
               </div>
 
-              <div style="width: 145px;">
+              <div style="width: 140px;">
                 <Select
                   v-model="item.tipoPlato"
                   :options="tiposPlato"
+                  @change="onTipoPlatoChange(item)"
                   fluid
                 />
               </div>
 
-              <!-- Selector de Cantidad Cómodo, Escribible y con botones -->
-              <div style="width: 135px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
+              <!-- Precio Unitario Fijo No Editable -->
+              <div
+                style="
+                  width: 90px;
+                  text-align: center;
+                  padding: 0.55rem 0.4rem;
+                  background: #f1f5f9;
+                  border: 1px solid #cbd5e1;
+                  border-radius: 8px;
+                  font-weight: 800;
+                  font-size: 0.88rem;
+                  color: #1e293b;
+                  box-sizing: border-box;
+                "
+              >
+                {{ formatearMonto(item.precioUnitario || 0) }}
+              </div>
+
+              <!-- Selector de Cantidad Cómodo, Escribible y con botones de cantidad -->
+              <div style="width: 125px; display: flex; align-items: center; justify-content: space-between; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0.2rem 0.4rem;">
                 <Button
                   icon="pi pi-minus"
                   severity="secondary"
                   text
                   rounded
                   size="small"
-                  style="width: 26px; height: 26px; padding: 0;"
+                  style="width: 24px; height: 24px; padding: 0;"
                   :disabled="item.cantidad <= 1"
                   @click="item.cantidad = Math.max(1, (Number(item.cantidad) || 1) - 1)"
                 />
@@ -830,7 +926,7 @@ onMounted(cargarVentas);
                   type="text"
                   inputmode="numeric"
                   pattern="[0-9]*"
-                  style="width: 50px; text-align: center; font-weight: 800; font-size: 1.05rem; color: #1e293b; border: none; outline: none; background: transparent;"
+                  style="width: 45px; text-align: center; font-weight: 800; font-size: 1rem; color: #1e293b; border: none; outline: none; background: transparent;"
                 />
                 <Button
                   icon="pi pi-plus"
@@ -838,7 +934,7 @@ onMounted(cargarVentas);
                   text
                   rounded
                   size="small"
-                  style="width: 26px; height: 26px; padding: 0;"
+                  style="width: 24px; height: 24px; padding: 0;"
                   :disabled="item.cantidad >= 999"
                   @click="item.cantidad = Math.min(999, (Number(item.cantidad) || 0) + 1)"
                 />
@@ -849,6 +945,7 @@ onMounted(cargarVentas);
                 severity="danger"
                 text
                 rounded
+                size="small"
                 :disabled="platosVentaForm.length <= 1"
                 title="Quitar este plato"
                 @click="quitarPlatoVenta(idx)"
@@ -870,7 +967,7 @@ onMounted(cargarVentas);
           >
             <div>
               <div style="font-size: 0.82rem; color: #166534; font-weight: 700; text-transform: uppercase;">
-                {{ totalPlatosVenta }} plato(s) a {{ formatearMonto(precioUnitario || 0) }} c/u
+                {{ totalPlatosVenta }} plato(s) en total
               </div>
               <div style="font-size: 0.75rem; color: #15803d;">
                 Método de cobro: <strong>{{ metodoPago }}</strong>

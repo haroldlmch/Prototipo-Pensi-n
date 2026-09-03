@@ -337,4 +337,57 @@ export class DashboardService {
         p.pensionado.estado !== false,
     );
   }
+
+  async estadisticasPlatos() {
+    const consumos = await this.consumoRepository.find({
+      relations: { opcionMenu: true },
+    });
+    const ventas = await this.ventaRepository.find({
+      relations: { opcionMenu: true },
+    });
+
+    const conteoPlatos: { [nombre: string]: number } = {};
+    let totalPlatosServidos = 0;
+
+    for (const c of consumos) {
+      const cant = Number(c.cantidadCompletos) || 1;
+      const nombre =
+        c.opcionMenu?.nombreSegundo ||
+        (c.tipoPlato === 'Solo Sopa' ? '🍲 Solo Sopa' : 'Almuerzo del Día');
+      conteoPlatos[nombre] = (conteoPlatos[nombre] || 0) + cant;
+      totalPlatosServidos += cant;
+    }
+
+    for (const v of ventas) {
+      const cant = Number(v.cantidadCompletos) || 1;
+      const nombre =
+        v.opcionMenu?.nombreSegundo ||
+        (v.tipoPlato === 'Solo Sopa' ? '🍲 Solo Sopa' : 'Almuerzo del Día');
+      conteoPlatos[nombre] = (conteoPlatos[nombre] || 0) + cant;
+      totalPlatosServidos += cant;
+    }
+
+    const listaOrdenada = Object.entries(conteoPlatos)
+      .map(([nombre, cantidad]) => ({
+        nombre,
+        cantidad,
+        porcentaje:
+          totalPlatosServidos > 0
+            ? Math.round((cantidad / totalPlatosServidos) * 100)
+            : 0,
+      }))
+      .sort((a, b) => b.cantidad - a.cantidad);
+
+    const masVendidos = listaOrdenada.slice(0, 5);
+    const menosVendidos =
+      listaOrdenada.length > 5 ? [...listaOrdenada].reverse().slice(0, 5) : [];
+
+    return {
+      totalPlatosServidos,
+      totalVariedadPlatos: listaOrdenada.length,
+      masVendidos,
+      menosVendidos,
+      rankingCompleto: listaOrdenada,
+    };
+  }
 }

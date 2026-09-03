@@ -42,5 +42,10 @@ export class DashboardController {
       fechaFin,
     );
   }
+
+  @Get('estadisticas-platos')
+  estadisticasPlatos() {
+    return this.dashboardService.estadisticasPlatos();
+  }
 }
 

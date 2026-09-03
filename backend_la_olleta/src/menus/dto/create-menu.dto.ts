@@ -1,9 +1,11 @@
 import {
   IsArray,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -19,7 +21,16 @@ export class CreateMenuDto {
   sopa!: string;
 
   @IsOptional()
+  @IsInt({ message: 'La cantidad inicial de sopa debe ser un número entero.' })
+  @Min(0, { message: 'La cantidad de sopa no puede ser negativa.' })
+  cantidadSopaInicial?: number;
+
+  @IsOptional()
+  @IsInt({ message: 'La cantidad disponible de sopa debe ser un número entero.' })
+  @Min(0, { message: 'La cantidad disponible de sopa no puede ser negativa.' })
+  cantidadSopaDisponible?: number;
+
+  @IsOptional()
   @IsArray({ message: 'Las opciones del menú deben ser una lista.' })
-  @IsString({ each: true, message: 'Cada opción de plato debe ser un texto válido.' })
-  opciones?: string[];
+  opciones?: any[];
 }

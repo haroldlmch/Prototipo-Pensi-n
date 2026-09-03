@@ -34,6 +34,8 @@ export class ConfiguracionService {
     return await this.create({
       precioPensionado: 15,
       precioCasual: 18,
+      precioCasualSegundo: 15,
+      precioCasualSopa: 10,
       precioExtra: 20,
       saldoBajoAlerta: 5,
     });

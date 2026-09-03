@@ -22,6 +22,22 @@ export class Configuracion {
   precioCasual!: number;
 
   @Column('decimal', {
+    name: 'precio_casual_segundo',
+    precision: 10,
+    scale: 2,
+    default: 15.00,
+  })
+  precioCasualSegundo!: number;
+
+  @Column('decimal', {
+    name: 'precio_casual_sopa',
+    precision: 10,
+    scale: 2,
+    default: 10.00,
+  })
+  precioCasualSopa!: number;
+
+  @Column('decimal', {
     name: 'precio_extra',
     precision: 10,
     scale: 2,

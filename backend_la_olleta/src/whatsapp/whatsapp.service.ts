@@ -114,6 +114,13 @@ export class WhatsappService implements OnModuleInit {
     }
   }
 
+  private extractCleanUser(jid: string): string {
+    if (!jid) return '';
+    const noServer = jid.split('@')[0] || '';
+    const noDevice = noServer.split(':')[0] || '';
+    return noDevice.replace(/\D/g, '');
+  }
+
   private async handleIncomingMessage(msg: any) {
     const remoteJid = msg.key.remoteJid || '';
     const isGroup = remoteJid.endsWith('@g.us');
@@ -154,70 +161,83 @@ export class WhatsappService implements OnModuleInit {
     let sender = msg.key.participant || remoteJid;
     const pushName = msg.pushName || '';
 
-    // Si WhatsApp envía el ID privado @lid (en grupos o chats directos), resolver el número de teléfono real
-    if (sender.includes('@lid')) {
-      const senderLidDigits = sender.replace(/\D/g, '');
+    this.logger.log(`📥 Mensaje recibido de raw JID: "${sender}" (Alias: "${pushName}") | Texto: "${text}"`);
 
-      // 1. Verificar si Baileys ya incluye el JID con número de teléfono en las propiedades del mensaje
-      if ((msg.key as any).participantPn) {
-        sender = (msg.key as any).participantPn;
-        this.logger.log(`🔍 Teléfono extraído de participantPn: ${sender}`);
-      } else if ((msg.key as any).remoteJidPn) {
-        sender = (msg.key as any).remoteJidPn;
-        this.logger.log(`🔍 Teléfono extraído de remoteJidPn: ${sender}`);
-      } else {
-        // 2. Resolver a través de los participantes del grupo
-        try {
-          let foundRealPn: string | null = null;
+    // 1. Verificar si Baileys ya incluye el número real en propiedades PN
+    if ((msg.key as any).participantPn) {
+      sender = (msg.key as any).participantPn;
+      this.logger.log(`🔍 Teléfono extraído de participantPn: ${sender}`);
+    } else if ((msg.key as any).remoteJidPn) {
+      sender = (msg.key as any).remoteJidPn;
+      this.logger.log(`🔍 Teléfono extraído de remoteJidPn: ${sender}`);
+    } else if ((msg.key as any).senderPn) {
+      sender = (msg.key as any).senderPn;
+      this.logger.log(`🔍 Teléfono extraído de senderPn: ${sender}`);
+    } else if (sender.includes('@lid')) {
+      // 2. Resolver LID a número de teléfono a través de los participantes del grupo
+      const senderLidUser = this.extractCleanUser(sender);
+      try {
+        let foundRealPn: string | null = null;
 
-          if (isGroup) {
-            const groupMeta = await this.sock?.groupMetadata(remoteJid);
-            if (groupMeta && groupMeta.participants) {
-              const participantObj = groupMeta.participants.find((p: any) => {
-                const pLidDigits = (p.lid || '').replace(/\D/g, '');
-                const pIdDigits = (p.id || '').replace(/\D/g, '');
-                return (pLidDigits && pLidDigits === senderLidDigits) || (pIdDigits && pIdDigits === senderLidDigits);
-              });
+        if (isGroup) {
+          const groupMeta = await this.sock?.groupMetadata(remoteJid);
+          if (groupMeta && groupMeta.participants) {
+            const participantObj = groupMeta.participants.find((p: any) => {
+              const pLidUser = this.extractCleanUser(p.lid || '');
+              const pIdUser = this.extractCleanUser(p.id || '');
+              return (pLidUser && pLidUser === senderLidUser) || (pIdUser && pIdUser === senderLidUser);
+            });
 
-              if (participantObj) {
-                if (participantObj.id && !participantObj.id.includes('@lid')) {
-                  foundRealPn = participantObj.id;
-                } else if ((participantObj as any).pn) {
-                  foundRealPn = (participantObj as any).pn;
-                }
+            if (participantObj) {
+              const cleanId = this.extractCleanUser(participantObj.id || '');
+              const cleanPn = this.extractCleanUser((participantObj as any).phoneNumber || (participantObj as any).pn || '');
+              
+              if (participantObj.id && !participantObj.id.includes('@lid') && cleanId.length >= 7) {
+                foundRealPn = participantObj.id;
+              } else if (cleanPn.length >= 7) {
+                foundRealPn = `${cleanPn}@s.whatsapp.net`;
               }
             }
           }
+        }
 
-          // 3. Si no se encontró en el grupo actual o es chat privado, buscar en los grupos donde participa el bot
-          if (!foundRealPn && this.sock?.groupFetchAllParticipating) {
-            const allGroups = await this.sock.groupFetchAllParticipating();
-            for (const gId in allGroups) {
-              const g = allGroups[gId];
-              const pObj = g?.participants?.find((p: any) => {
-                const pLid = (p.lid || '').replace(/\D/g, '');
-                return pLid && pLid === senderLidDigits;
-              });
-              if (pObj && pObj.id && !pObj.id.includes('@lid')) {
+        // 3. Si no se encontró en el grupo actual, buscar en todos los grupos participantes
+        if (!foundRealPn && this.sock?.groupFetchAllParticipating) {
+          const allGroups = await this.sock.groupFetchAllParticipating();
+          for (const gId in allGroups) {
+            const g = allGroups[gId];
+            const pObj = g?.participants?.find((p: any) => {
+              const pLidUser = this.extractCleanUser(p.lid || '');
+              const pIdUser = this.extractCleanUser(p.id || '');
+              return (pLidUser && pLidUser === senderLidUser) || (pIdUser && pIdUser === senderLidUser);
+            });
+
+            if (pObj) {
+              const cleanId = this.extractCleanUser(pObj.id || '');
+              const cleanPn = this.extractCleanUser((pObj as any).phoneNumber || (pObj as any).pn || '');
+              if (pObj.id && !pObj.id.includes('@lid') && cleanId.length >= 7) {
                 foundRealPn = pObj.id;
+                break;
+              } else if (cleanPn.length >= 7) {
+                foundRealPn = `${cleanPn}@s.whatsapp.net`;
                 break;
               }
             }
           }
-
-          if (foundRealPn) {
-            this.logger.log(`🔍 Mapeado LID ${sender} -> Número real de teléfono: ${foundRealPn}`);
-            sender = foundRealPn;
-          } else {
-            this.logger.warn(`No se pudo resolver el número real para el LID ${sender}. Se intentará con pushName "${pushName}"`);
-          }
-        } catch (err) {
-          this.logger.debug('Error al intentar resolver LID:', err);
         }
+
+        if (foundRealPn) {
+          this.logger.log(`🔍 Mapeado LID ${sender} -> Número real de teléfono: ${foundRealPn}`);
+          sender = foundRealPn;
+        } else {
+          this.logger.warn(`No se pudo resolver el número real para el LID ${sender}.`);
+        }
+      } catch (err) {
+        this.logger.debug('Error al intentar resolver LID:', err);
       }
     }
 
-    const rawPhone = sender.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/:\d+/, '');
+    const rawPhone = this.extractCleanUser(sender);
     const mentionJid = msg.key.participant || remoteJid;
 
     if (esAyuda) {
@@ -225,10 +245,11 @@ export class WhatsappService implements OnModuleInit {
         text:
 `🤖 *L'OLLETA - COMANDOS DISPONIBLES*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *#pedido [platos]* : Reservar tu almuerzo de hoy.
+• *#pedido [platos o número]* : Reservar tu almuerzo de hoy.
   _Ejemplos:_
-  • _Solo segundo:_ \`#pedido 1 chuleta\` (no incluye sopa)
-  • _Con sopa (Completo):_ \`#pedido 1 completo chuleta\` o \`#pedido 1 sopa, 1 chuleta\`
+  • _Por número:_ \`#pedido 1\` o \`#pedido 2\`
+  • _Múltiples:_ \`#pedido 2 del 1\` o \`#pedido 1 chuleta, 1 saice\`
+  • _Con sopa (Completo):_ \`#pedido 1 completo\` o \`#pedido 2 de la 1 con sopa\`
 • *#cancelar* : Cancelar tu pedido de hoy y devolver tus platos.
 • *#saldo* : Consultar tus almuerzos disponibles.
 • *#ayuda* : Ver esta lista de comandos.
@@ -298,10 +319,15 @@ export class WhatsappService implements OnModuleInit {
       observacionSopas = 'No (Solo Segundo)';
     }
 
-    // 2. Limpiar texto y separar por líneas, comas, signos +, o la palabra " y "
-    const cleanText = rawText.replace(/(\d+)\s*sopas?|sin\s*sopas?|con\s*sopas?|solo\s*segundos?|solamente\s*segundos?|\bsopas?\b|\bcompletos?\b/gi, ' ');
+    // 2. Limpiar palabras clave de sopa/completo
+    const cleanText = rawText
+      .replace(/(\d+)\s*sopas?/gi, ' ')
+      .replace(/sin\s*sopas?|con\s*sopas?|solo\s*segundos?|solamente\s*segundos?|\bsopas?\b|\bcompletos?\b/gi, ' ')
+      .trim();
+
+    // 3. Separar por líneas, comas, signos +, o conjunciones ' y ' / ' e '
     const lineas = cleanText
-      .split(/[\n,+]|\s+y\s+/i)
+      .split(/[\n,+]|\s+(?:y|e)\s+/i)
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
@@ -309,61 +335,76 @@ export class WhatsappService implements OnModuleInit {
 
     for (const linea of lineas) {
       let cantidad = 1;
-      let textoPlato = linea;
-
-      // Patrón: "2 chuletas", "2x chuletas", "2 de chuletas"
-      const matchInicio = linea.match(/^(\d+)\s*(?:x|de)?\s*(.*)$/i);
-      // Patrón: "chuleta x2" o "chuleta 2"
-      const matchFin = linea.match(/^(.*?)\s*(?:x|\*|\:)?\s*(\d+)$/i);
-
-      if (matchInicio && matchInicio[1] && matchInicio[2]) {
-        cantidad = parseInt(matchInicio[1], 10);
-        textoPlato = matchInicio[2].trim();
-      } else if (matchFin && matchFin[1] && matchFin[2]) {
-        if (matchFin[1].trim().length > 0 && isNaN(Number(matchFin[1].trim()))) {
-          cantidad = parseInt(matchFin[2], 10);
-          textoPlato = matchFin[1].trim();
-        }
-      }
-
-      if (isNaN(cantidad) || cantidad <= 0) cantidad = 1;
-
-      // Buscar coincidencia en opciones de menú
       let opcionEncontrada: OpcionesMenu | null = null;
+      const lineaTrim = linea.trim();
 
-      // A) Coincidencia por número de opción (ej. "1", "opcion 1", "#1", "segundo 1")
-      const numOpcionMatch = textoPlato.match(/^(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
-      if (numOpcionMatch) {
-        const idx = parseInt(numOpcionMatch[1], 10) - 1;
-        if (idx >= 0 && idx < menuOpciones.length) {
-          opcionEncontrada = menuOpciones[idx];
+      // Caso 1: Solo un número (ej. "1", "2", "3", "#1", "#2", "opcion 1", "opción 2", "segundo 1", "segundo 2", "plato 1")
+      const soloNumeroMatch = lineaTrim.match(/^(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
+      if (soloNumeroMatch && soloNumeroMatch[1]) {
+        const num = parseInt(soloNumeroMatch[1], 10);
+        if (num >= 1 && num <= menuOpciones.length) {
+          opcionEncontrada = menuOpciones[num - 1] || null;
+          cantidad = 1;
+        } else if (menuOpciones.length > 0) {
+          cantidad = num;
+          opcionEncontrada = menuOpciones[0] || null;
         }
       }
 
-      // B) Coincidencia por nombre completo o substring
+      // Caso 2: Cantidad + Opción numérica (ej. "2 del 1", "2 de la 1", "2 de la opcion 2", "2x1", "2*2", "2 opcion 1", "2 #1", "2 del 2")
       if (!opcionEncontrada) {
-        const lowerTexto = textoPlato.toLowerCase().trim();
-        if (lowerTexto) {
-          opcionEncontrada = menuOpciones.find((op) => {
-            const nomLower = op.nombreSegundo.toLowerCase();
-            return nomLower.includes(lowerTexto) || lowerTexto.includes(nomLower);
-          }) || null;
-        }
-      }
-
-      // C) Búsqueda por palabras clave individuales
-      if (!opcionEncontrada && textoPlato.trim().length > 1) {
-        const palabras = textoPlato.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-        for (const pal of palabras) {
-          const matchPal = menuOpciones.find((op) => op.nombreSegundo.toLowerCase().includes(pal));
-          if (matchPal) {
-            opcionEncontrada = matchPal;
-            break;
+        const cantYNumOpcionMatch = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
+        if (cantYNumOpcionMatch && cantYNumOpcionMatch[1] && cantYNumOpcionMatch[2]) {
+          cantidad = parseInt(cantYNumOpcionMatch[1], 10) || 1;
+          const numOpc = parseInt(cantYNumOpcionMatch[2], 10);
+          if (numOpc >= 1 && numOpc <= menuOpciones.length) {
+            opcionEncontrada = menuOpciones[numOpc - 1] || null;
           }
         }
       }
 
-      // Si se encontró opción válida, acumular cantidad
+      // Caso 3: Cantidad al inicio + Nombre de plato (ej. "2 chuletas", "2x chuleta", "2 de saice")
+      let textoNombrePlato = lineaTrim;
+      if (!opcionEncontrada) {
+        const matchInicio = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(.+)$/i);
+        if (matchInicio && matchInicio[1] && matchInicio[2]) {
+          cantidad = parseInt(matchInicio[1], 10) || 1;
+          textoNombrePlato = matchInicio[2].trim();
+        } else {
+          // Patrón: Nombre + Cantidad al final (ej. "chuleta x2", "chuleta 2", "saice: 3")
+          const matchFin = lineaTrim.match(/^(.+?)\s*(?:x|\*|\:)?\s*(\d+)$/i);
+          if (matchFin && matchFin[1] && matchFin[2]) {
+            if (isNaN(Number(matchFin[1].trim()))) {
+              cantidad = parseInt(matchFin[2], 10) || 1;
+              textoNombrePlato = matchFin[1].trim();
+            }
+          }
+        }
+
+        // Buscar coincidencia por nombre de plato
+        const lowerTexto = textoNombrePlato.toLowerCase().trim();
+        if (lowerTexto) {
+          // A) Coincidencia directa / subcadena
+          opcionEncontrada = menuOpciones.find((op) => {
+            const nomLower = op.nombreSegundo.toLowerCase();
+            return nomLower.includes(lowerTexto) || lowerTexto.includes(nomLower);
+          }) || null;
+
+          // B) Coincidencia por palabras individuales
+          if (!opcionEncontrada) {
+            const palabras = lowerTexto.split(/\s+/).filter((w) => w.length > 2);
+            for (const pal of palabras) {
+              const matchPal = menuOpciones.find((op) => op.nombreSegundo.toLowerCase().includes(pal));
+              if (matchPal) {
+                opcionEncontrada = matchPal;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Si se encontró opción válida, acumular en el mapa
       if (opcionEncontrada) {
         if (itemsMap.has(opcionEncontrada.id)) {
           itemsMap.get(opcionEncontrada.id)!.cantidad += cantidad;
@@ -400,27 +441,45 @@ export class WhatsappService implements OnModuleInit {
       where: { estado: true },
     });
 
-    const cleanRaw = rawPhone.replace(/\D/g, '');
+    const cleanRaw = this.extractCleanUser(rawPhone);
+    const last8Raw = cleanRaw.length >= 8 ? cleanRaw.slice(-8) : cleanRaw;
 
+    this.logger.log(`🔎 Buscando pensionado para teléfono recibido: "${rawPhone}" -> Clean: "${cleanRaw}" (Últimos 8: "${last8Raw}")`);
+
+    // A) Búsqueda directa por número de teléfono
     let pensionado = allPensionados.find((p) => {
       if (!p.telefono) return false;
-      const cleanP = p.telefono.replace(/\D/g, '');
+      const cleanP = this.extractCleanUser(p.telefono);
+      const last8P = cleanP.length >= 8 ? cleanP.slice(-8) : cleanP;
+
+      // Coincidencia exacta de los últimos 8 dígitos (celular boliviano)
+      if (last8Raw && last8P && last8Raw.length >= 7 && last8P.length >= 7 && last8Raw === last8P) {
+        return true;
+      }
+      // Coincidencia por sufijo o prefijo
       return cleanRaw.endsWith(cleanP) || cleanP.endsWith(cleanRaw);
     });
 
-    // Fallback: Si no coincide por teléfono y se tiene pushName, buscar por nombre
-    if (!pensionado && pushName && pushName.trim().length > 2) {
+    if (pensionado) {
+      this.logger.log(`✅ Pensionado encontrado por TELÉFONO: "${pensionado.nombreCompleto}" (Tel BD: ${pensionado.telefono})`);
+      return pensionado;
+    }
+
+    // B) Fallback: Si no coincide por teléfono y se tiene pushName, buscar por nombre
+    if (pushName && pushName.trim().length > 2) {
       const pNameLower = pushName.toLowerCase().trim();
       pensionado = allPensionados.find((p) => {
         const nomLower = p.nombreCompleto.toLowerCase();
         return nomLower.includes(pNameLower) || pNameLower.includes(nomLower);
       });
       if (pensionado) {
-        this.logger.log(`💡 Pensionado encontrado por alias (${pushName} -> ${pensionado.nombreCompleto})`);
+        this.logger.log(`💡 Pensionado encontrado por alias/pushName: "${pushName}" -> ${pensionado.nombreCompleto}`);
+        return pensionado;
       }
     }
 
-    return pensionado || null;
+    this.logger.warn(`❌ No se encontró pensionado para teléfono "${rawPhone}" (Clean: "${cleanRaw}") ni por nombre "${pushName}"`);
+    return null;
   }
 
   private async processOrder(

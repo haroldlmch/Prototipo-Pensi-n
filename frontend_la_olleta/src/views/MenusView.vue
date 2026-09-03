@@ -15,13 +15,26 @@ import api from '../api/axios';
 interface OpcionMenu {
   id?: number;
   nombreSegundo: string;
+  cantidadInicial?: number;
+  cantidadDisponible?: number;
 }
 
 interface Menu {
   id: number;
   fecha: string;
   sopa: string;
+  cantidadSopaInicial?: number;
+  cantidadSopaDisponible?: number;
   opcionesMenu?: OpcionMenu[];
+}
+
+interface OpcionForm {
+  id?: number;
+  nombreSegundo: string;
+  cantidadInicial: number;
+  cantidadDisponible?: number;
+  _originalInicial?: number;
+  _originalDisponible?: number;
 }
 
 const menus = ref<Menu[]>([]);
@@ -71,8 +84,14 @@ const menuId = ref<number | null>(null);
 
 const fecha = ref('');
 const sopa = ref('');
-const listaOpciones = ref<string[]>([]);
+const cantidadSopaInicial = ref<number | null>(null);
+const cantidadSopaDisponible = ref<number | null>(null);
+const originalSopaInicial = ref<number>(0);
+const originalSopaDisponible = ref<number>(0);
+
+const listaOpciones = ref<OpcionForm[]>([]);
 const nuevaOpcionTexto = ref('');
+const nuevaOpcionRaciones = ref<number | null>(null);
 
 const mostrarConfirmarEliminar = ref(false);
 const idAEliminar = ref<number | null>(null);
@@ -94,8 +113,13 @@ const limpiarFormulario = () => {
   menuId.value = null;
   fecha.value = obtenerFechaLocal();
   sopa.value = '';
+  cantidadSopaInicial.value = null;
+  cantidadSopaDisponible.value = null;
+  originalSopaInicial.value = 0;
+  originalSopaDisponible.value = 0;
   listaOpciones.value = [];
   nuevaOpcionTexto.value = '';
+  nuevaOpcionRaciones.value = null;
   errorMensaje.value = '';
   modoEdicion.value = false;
 };
@@ -109,11 +133,59 @@ const editarMenu = (menu: Menu) => {
   menuId.value = menu.id;
   fecha.value = menu.fecha ? menu.fecha.slice(0, 10) : '';
   sopa.value = menu.sopa;
-  listaOpciones.value = (menu.opcionesMenu || []).map((op) => op.nombreSegundo);
+  const sIni = menu.cantidadSopaInicial || 0;
+  const sDisp = menu.cantidadSopaDisponible !== undefined ? menu.cantidadSopaDisponible : sIni;
+  cantidadSopaInicial.value = sIni || null;
+  cantidadSopaDisponible.value = sDisp;
+  originalSopaInicial.value = sIni;
+  originalSopaDisponible.value = sDisp;
+
+  listaOpciones.value = (menu.opcionesMenu || []).map((op) => {
+    const cIni = op.cantidadInicial || 0;
+    const cDisp = op.cantidadDisponible !== undefined ? op.cantidadDisponible : cIni;
+    return {
+      id: op.id,
+      nombreSegundo: op.nombreSegundo,
+      cantidadInicial: cIni,
+      cantidadDisponible: cDisp,
+      _originalInicial: cIni,
+      _originalDisponible: cDisp,
+    };
+  });
   nuevaOpcionTexto.value = '';
+  nuevaOpcionRaciones.value = null;
   errorMensaje.value = '';
   modoEdicion.value = true;
   visible.value = true;
+};
+
+const onCambioOpcionInicial = (op: OpcionForm) => {
+  const cIni = Number(op.cantidadInicial) || 0;
+  op.cantidadInicial = cIni;
+
+  if ((op._originalInicial || 0) === 0 || op.cantidadDisponible === undefined || op.cantidadDisponible === null) {
+    op.cantidadDisponible = cIni;
+  } else {
+    const consumidos = Math.max(0, (op._originalInicial || 0) - (op._originalDisponible || 0));
+    op.cantidadDisponible = Math.max(0, cIni - consumidos);
+  }
+
+  if (op.cantidadDisponible > cIni) {
+    op.cantidadDisponible = cIni;
+  }
+};
+
+const onCambioSopaInicial = () => {
+  const sIni = Number(cantidadSopaInicial.value) || 0;
+  if (originalSopaInicial.value === 0 || cantidadSopaDisponible.value === null || cantidadSopaDisponible.value === undefined) {
+    cantidadSopaDisponible.value = sIni;
+  } else {
+    const consumidos = Math.max(0, originalSopaInicial.value - originalSopaDisponible.value);
+    cantidadSopaDisponible.value = Math.max(0, sIni - consumidos);
+  }
+  if (cantidadSopaDisponible.value > sIni) {
+    cantidadSopaDisponible.value = sIni;
+  }
 };
 
 const agregarOpcion = () => {
@@ -127,13 +199,21 @@ const agregarOpcion = () => {
     errorMensaje.value = 'El nombre del plato no puede superar los 150 caracteres.';
     return;
   }
-  if (listaOpciones.value.includes(texto)) {
+  if (listaOpciones.value.some((op) => op.nombreSegundo.toLowerCase() === texto.toLowerCase())) {
     errorMensaje.value = 'Esta opción ya fue agregada al menú.';
     return;
   }
   errorMensaje.value = '';
-  listaOpciones.value.push(texto);
+  const raciones = Number(nuevaOpcionRaciones.value) || 0;
+  listaOpciones.value.push({
+    nombreSegundo: texto,
+    cantidadInicial: raciones,
+    cantidadDisponible: raciones,
+    _originalInicial: raciones,
+    _originalDisponible: raciones,
+  });
   nuevaOpcionTexto.value = '';
+  nuevaOpcionRaciones.value = null;
 };
 
 const removerOpcion = (index: number) => {
@@ -169,10 +249,37 @@ const guardarMenu = async () => {
 
   guardando.value = true;
   try {
+    const racionesSopa = cantidadSopaInicial.value ? Number(cantidadSopaInicial.value) : 0;
+    let sopaDisp = cantidadSopaDisponible.value !== null && cantidadSopaDisponible.value !== undefined
+      ? Number(cantidadSopaDisponible.value)
+      : racionesSopa;
+    if (sopaDisp > racionesSopa) sopaDisp = racionesSopa;
+    if (racionesSopa > 0 && sopaDisp <= 0 && (!modoEdicion.value || originalSopaInicial.value === 0)) {
+      sopaDisp = racionesSopa;
+    }
+
     const payload = {
       fecha: fecha.value.slice(0, 10),
       sopa: sopaTexto,
-      opciones: listaOpciones.value,
+      cantidadSopaInicial: racionesSopa,
+      cantidadSopaDisponible: sopaDisp,
+      opciones: listaOpciones.value.map((op) => {
+        const cIni = Number(op.cantidadInicial) || 0;
+        let cDisp =
+          op.cantidadDisponible !== undefined && op.cantidadDisponible !== null
+            ? Number(op.cantidadDisponible)
+            : cIni;
+        if (cDisp > cIni) cDisp = cIni;
+        if (cIni > 0 && cDisp <= 0 && (!modoEdicion.value || (op._originalInicial || 0) === 0)) {
+          cDisp = cIni;
+        }
+        return {
+          id: op.id,
+          nombreSegundo: op.nombreSegundo,
+          cantidadInicial: cIni,
+          cantidadDisponible: cDisp,
+        };
+      }),
     };
 
     if (modoEdicion.value && menuId.value) {
@@ -373,26 +480,42 @@ onMounted(() => {
 
         <Column
           header="Sopa del Día"
-          style="font-weight: 600; color: #1c1917; width: 220px; text-align: center;"
+          style="font-weight: 600; color: #1c1917; width: 240px; text-align: center;"
         >
           <template #body="slotProps">
-            <span>{{ slotProps.data.sopa }}</span>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 0.25rem;">
+              <span style="font-weight: 700;">{{ slotProps.data.sopa }}</span>
+              <Tag
+                v-if="slotProps.data.cantidadSopaInicial > 0"
+                :severity="(slotProps.data.cantidadSopaDisponible || 0) <= 0 ? 'danger' : (slotProps.data.cantidadSopaDisponible || 0) <= 5 ? 'warn' : 'info'"
+                :value="`${slotProps.data.cantidadSopaDisponible ?? slotProps.data.cantidadSopaInicial} / ${slotProps.data.cantidadSopaInicial} disp.`"
+                rounded
+                style="font-size: 0.75rem;"
+              />
+            </div>
           </template>
         </Column>
 
         <Column
-          header="Platos Fuertes / Segundos Disponibles"
+          header="Platos Fuertes / Segundos y Disponibilidad"
           style="color: #44403c; text-align: center;"
         >
           <template #body="slotProps">
-            <div style="display: flex; justify-content: center; align-items: center; gap: 0.45rem; flex-wrap: wrap; text-align: center;">
-              <Tag
+            <div style="display: flex; justify-content: center; align-items: center; gap: 0.5rem; flex-wrap: wrap; text-align: center;">
+              <div
                 v-for="(opcion, index) in slotProps.data.opcionesMenu || []"
                 :key="opcion.id || opcion.nombreSegundo"
-                :value="opcion.nombreSegundo"
-                rounded
-                :style="obtenerEstiloPlato(index)"
-              />
+                style="display: inline-flex; align-items: center; gap: 0.4rem; background: #fffaf5; border: 1px solid #fed7aa; padding: 0.3rem 0.65rem; border-radius: 20px;"
+              >
+                <span style="font-weight: 700; font-size: 0.88rem; color: #1c1917;">{{ opcion.nombreSegundo }}</span>
+                <Tag
+                  v-if="opcion.cantidadInicial && opcion.cantidadInicial > 0"
+                  :severity="(opcion.cantidadDisponible || 0) <= 0 ? 'danger' : (opcion.cantidadDisponible || 0) <= 5 ? 'warn' : 'success'"
+                  :value="(opcion.cantidadDisponible || 0) <= 0 ? `0/${opcion.cantidadInicial} (Agotado)` : `${opcion.cantidadDisponible ?? opcion.cantidadInicial}/${opcion.cantidadInicial} disp.`"
+                  rounded
+                  style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                />
+              </div>
               <span
                 v-if="!slotProps.data.opcionesMenu || slotProps.data.opcionesMenu.length === 0"
                 style="color: #a8a29e; font-size: 0.85rem; font-style: italic;"
@@ -433,7 +556,7 @@ onMounted(() => {
       v-model:visible="visible"
       modal
       :header="modoEdicion ? 'Editar Menú del Día' : 'Nuevo Menú del Día'"
-      :style="{ width: '560px' }"
+      :style="{ width: '600px' }"
     >
       <div style="display: flex; flex-direction: column; gap: 1.25rem; padding-top: 0.5rem;">
         <Message v-if="errorMensaje" severity="error" :closable="false">
@@ -474,6 +597,40 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Raciones de Sopa -->
+        <div style="display: flex; align-items: center; justify-content: space-between; background: #fff7ed; border: 1px dashed #fdba74; border-radius: 8px; padding: 0.6rem 0.85rem; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <i class="pi pi-box" style="color: #ea580c; font-size: 1.05rem;"></i>
+            <span style="font-size: 0.85rem; font-weight: 700; color: #9a3412;">
+              Raciones de Sopa Preparadas (Opcional):
+            </span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div style="display: flex; align-items: center; gap: 0.3rem;">
+              <label v-if="modoEdicion" style="font-size: 0.8rem; color: #9a3412; font-weight: 600;">Total:</label>
+              <input
+                v-model.number="cantidadSopaInicial"
+                type="number"
+                min="0"
+                placeholder="Ej. 60"
+                @input="onCambioSopaInicial"
+                style="width: 75px; padding: 0.35rem 0.5rem; border: 1px solid #fed7aa; border-radius: 6px; text-align: center; font-weight: 800; font-size: 0.9rem;"
+              />
+            </div>
+            <div v-if="modoEdicion" style="display: flex; align-items: center; gap: 0.3rem;">
+              <label style="font-size: 0.8rem; color: #9a3412; font-weight: 600;">Disp.:</label>
+              <input
+                v-model.number="cantidadSopaDisponible"
+                type="number"
+                min="0"
+                :max="cantidadSopaInicial || 0"
+                placeholder="Ej. 60"
+                style="width: 75px; padding: 0.35rem 0.5rem; border: 1px solid #fed7aa; border-radius: 6px; text-align: center; font-weight: 800; font-size: 0.9rem;"
+              />
+            </div>
+          </div>
+        </div>
+
         <!-- Sección de Opciones de Platos Fuertes (Detalle) -->
         <div
           style="
@@ -496,13 +653,21 @@ onMounted(() => {
             </span>
           </div>
 
-          <!-- Input para agregar nuevo plato -->
-          <div style="display: flex; gap: 0.5rem;">
+          <!-- Input para agregar nuevo plato con raciones -->
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
             <InputText
               v-model="nuevaOpcionTexto"
-              placeholder="Nombre del segundo (ej: Milanesa con puré)..."
+              placeholder="Nombre del segundo (ej: Milanesa)..."
               maxlength="150"
               style="flex: 1; padding: 0.6rem 0.85rem;"
+              @keyup.enter="agregarOpcion"
+            />
+            <input
+              v-model.number="nuevaOpcionRaciones"
+              type="number"
+              min="0"
+              placeholder="Raciones (ej. 35)"
+              style="width: 125px; padding: 0.6rem 0.65rem; border: 1px solid #fed7aa; border-radius: 6px; text-align: center; font-weight: 700; font-size: 0.85rem; box-sizing: border-box;"
               @keyup.enter="agregarOpcion"
             />
             <Button
@@ -529,9 +694,11 @@ onMounted(() => {
                 border: 1px solid #fed7aa;
                 border-radius: 8px;
                 padding: 0.5rem 0.75rem;
+                gap: 0.5rem;
+                flex-wrap: wrap;
               "
             >
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 140px;">
                 <span
                   style="
                     background: #ffedd5;
@@ -548,18 +715,40 @@ onMounted(() => {
                 >
                   {{ idx + 1 }}
                 </span>
-                <span style="font-weight: 600; color: #292524;">{{ op }}</span>
+                <span style="font-weight: 600; color: #292524;">{{ op.nombreSegundo }}</span>
               </div>
 
-              <Button
-                icon="pi pi-times"
-                severity="danger"
-                text
-                rounded
-                size="small"
-                title="Quitar opción"
-                @click="removerOpcion(idx)"
-              />
+              <div style="display: flex; align-items: center; gap: 0.6rem;">
+                <div style="display: flex; align-items: center; gap: 0.3rem;">
+                  <label style="font-size: 0.8rem; color: #78716c; font-weight: 600;">Total:</label>
+                  <input
+                    v-model.number="op.cantidadInicial"
+                    type="number"
+                    min="0"
+                    @input="onCambioOpcionInicial(op)"
+                    style="width: 65px; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-weight: 700; font-size: 0.85rem;"
+                  />
+                </div>
+                <div v-if="modoEdicion" style="display: flex; align-items: center; gap: 0.3rem;">
+                  <label style="font-size: 0.8rem; color: #78716c; font-weight: 600;">Disp.:</label>
+                  <input
+                    v-model.number="op.cantidadDisponible"
+                    type="number"
+                    min="0"
+                    :max="op.cantidadInicial"
+                    style="width: 65px; padding: 0.25rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; font-weight: 700; font-size: 0.85rem;"
+                  />
+                </div>
+                <Button
+                  icon="pi pi-times"
+                  severity="danger"
+                  text
+                  rounded
+                  size="small"
+                  title="Quitar opción"
+                  @click="removerOpcion(idx)"
+                />
+              </div>
             </div>
           </div>
           <div

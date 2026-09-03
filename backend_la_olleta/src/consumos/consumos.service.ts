@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { Consumo } from './entities/consumo.entity';
 import { Pensione } from '../pensiones/entities/pensione.entity';
 import { OpcionesMenu } from '../opciones-menu/entities/opciones-menu.entity';
+import { Menu } from '../menus/entities/menu.entity';
 
 import { CreateConsumoDto } from './dto/create-consumo.dto';
 import { UpdateConsumoDto } from './dto/update-consumo.dto';
@@ -24,6 +25,9 @@ export class ConsumosService {
 
     @InjectRepository(OpcionesMenu)
     private readonly opcionMenuRepository: Repository<OpcionesMenu>,
+
+    @InjectRepository(Menu)
+    private readonly menuRepository: Repository<Menu>,
   ) {}
 
   async create(createConsumoDto: CreateConsumoDto) {
@@ -60,6 +64,39 @@ export class ConsumosService {
     await this.pensionRepository.save(pension);
 
     const fechaLimpia = createConsumoDto.fecha.slice(0, 10);
+    const tipo = createConsumoDto.tipoPlato || 'Completo';
+
+    // Descontar stock de Segundo si aplica
+    if (
+      (tipo === 'Completo' || tipo === 'Solo Segundo') &&
+      opcionMenu &&
+      opcionMenu.cantidadDisponible !== null &&
+      opcionMenu.cantidadDisponible !== undefined
+    ) {
+      opcionMenu.cantidadDisponible = Math.max(
+        0,
+        opcionMenu.cantidadDisponible - createConsumoDto.cantidadCompletos,
+      );
+      await this.opcionMenuRepository.save(opcionMenu);
+    }
+
+    // Descontar stock de Sopa si aplica
+    if (tipo === 'Completo' || tipo === 'Solo Sopa') {
+      const menuFecha = await this.menuRepository.findOne({
+        where: { fecha: fechaLimpia as any },
+      });
+      if (
+        menuFecha &&
+        menuFecha.cantidadSopaDisponible !== null &&
+        menuFecha.cantidadSopaDisponible !== undefined
+      ) {
+        menuFecha.cantidadSopaDisponible = Math.max(
+          0,
+          menuFecha.cantidadSopaDisponible - createConsumoDto.cantidadCompletos,
+        );
+        await this.menuRepository.save(menuFecha);
+      }
+    }
 
     const estadoEntregaCalculado = createConsumoDto.estadoEntrega
       ? createConsumoDto.estadoEntrega
@@ -69,7 +106,7 @@ export class ConsumosService {
       fecha: fechaLimpia as any,
       cantidadCompletos: createConsumoDto.cantidadCompletos,
       tipoConsumo: createConsumoDto.tipoConsumo,
-      tipoPlato: createConsumoDto.tipoPlato || 'Completo',
+      tipoPlato: tipo,
       estadoEntrega: estadoEntregaCalculado,
       pension,
       opcionMenu,
@@ -212,6 +249,25 @@ export class ConsumosService {
       consumo.pension.completosDisponibles <= 0 ? 'AGOTADA' : 'ACTIVA';
 
     await this.pensionRepository.save(consumo.pension);
+
+    if (consumo.opcionMenu && consumo.opcionMenu.cantidadDisponible !== null && consumo.opcionMenu.cantidadDisponible !== undefined) {
+      consumo.opcionMenu.cantidadDisponible += consumo.cantidadCompletos;
+      await this.opcionMenuRepository.save(consumo.opcionMenu);
+    }
+
+    const tipo = consumo.tipoPlato || 'Completo';
+    if (tipo === 'Completo' || tipo === 'Solo Sopa') {
+      const fechaLimpia = (consumo.fecha as any instanceof Date)
+        ? (consumo.fecha as any).toISOString().slice(0, 10)
+        : String(consumo.fecha).slice(0, 10);
+      const menuFecha = await this.menuRepository.findOne({
+        where: { fecha: fechaLimpia as any },
+      });
+      if (menuFecha && menuFecha.cantidadSopaDisponible !== null && menuFecha.cantidadSopaDisponible !== undefined) {
+        menuFecha.cantidadSopaDisponible += consumo.cantidadCompletos;
+        await this.menuRepository.save(menuFecha);
+      }
+    }
 
     await this.consumoRepository.delete(id);
 

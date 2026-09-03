@@ -18,6 +18,20 @@ export class Menu {
   })
   sopa!: string;
 
+  @Column('integer', {
+    name: 'cantidad_sopa_inicial',
+    nullable: true,
+    default: 0,
+  })
+  cantidadSopaInicial?: number;
+
+  @Column('integer', {
+    name: 'cantidad_sopa_disponible',
+    nullable: true,
+    default: 0,
+  })
+  cantidadSopaDisponible?: number;
+
   @CreateDateColumn({
     name: 'fecha_creacion',
   })

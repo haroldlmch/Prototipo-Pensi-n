@@ -45,6 +45,19 @@ const cierre = ref({
 const ultimosConsumos = ref<any[]>([]);
 const ultimosPagos = ref<any[]>([]);
 const alertas = ref<any[]>([]);
+const estadisticasPlatos = ref<{
+  totalPlatosServidos: number;
+  totalVariedadPlatos: number;
+  masVendidos: { nombre: string; cantidad: number; porcentaje: number }[];
+  menosVendidos: { nombre: string; cantidad: number; porcentaje: number }[];
+  rankingCompleto: { nombre: string; cantidad: number; porcentaje: number }[];
+}>({
+  totalPlatosServidos: 0,
+  totalVariedadPlatos: 0,
+  masVendidos: [],
+  menosVendidos: [],
+  rankingCompleto: [],
+});
 const cargando = ref(true);
 const cargandoCierre = ref(false);
 
@@ -53,13 +66,14 @@ const fechaConsultaCierre = ref<Date | null>(new Date());
 const cargarDatosDashboard = async () => {
   try {
     cargando.value = true;
-    const [resumenRes, cierreRes, consumosRes, pagosRes, alertasRes] =
+    const [resumenRes, cierreRes, consumosRes, pagosRes, alertasRes, statsRes] =
       await Promise.all([
         api.get('/dashboard/resumen'),
         api.get('/dashboard/cierre-caja', { params: { fecha: getFechaLocalStr() } }),
         api.get('/dashboard/ultimos-consumos'),
         api.get('/dashboard/ultimos-pagos'),
         api.get('/dashboard/alertas'),
+        api.get('/dashboard/estadisticas-platos'),
       ]);
 
     resumen.value = resumenRes.data;
@@ -67,6 +81,7 @@ const cargarDatosDashboard = async () => {
     ultimosConsumos.value = consumosRes.data;
     ultimosPagos.value = pagosRes.data;
     alertas.value = alertasRes.data;
+    estadisticasPlatos.value = statsRes.data;
   } catch (error) {
     console.error('Error al cargar datos del dashboard:', error);
   } finally {
@@ -698,6 +713,142 @@ onMounted(() => {
             </template>
           </Column>
         </DataTable>
+      </div>
+    </div>
+
+    <!-- SECCIÓN: RANKING Y PREFERENCIA DE PLATOS (Toma de Decisiones de Cocina) -->
+    <div
+      style="
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #fed7aa;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+      "
+    >
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 0.5rem;">
+            <i class="pi pi-chart-pie" style="color: #ea580c;"></i>
+            <span>Popularidad de Platos y Toma de Decisiones de Cocina</span>
+          </h2>
+          <p style="margin: 0.25rem 0 0 0; color: #64748b; font-size: 0.85rem; font-weight: 500;">
+            Analiza los platos preferidos y los de menor rotación para calcular raciones exactas y evitar mermas.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <Tag :value="`${estadisticasPlatos.totalPlatosServidos} platos servidos en total`" severity="info" rounded />
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem;">
+        <!-- Platos Más Vendidos / Estrella -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 800; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🏆 Top Platos Más Pedidos (Favoritos)</span>
+            </span>
+            <span style="font-size: 0.78rem; font-weight: 700; color: #059669; background: #dcfce7; padding: 0.2rem 0.5rem; border-radius: 6px;">
+              Mayor Demanda
+            </span>
+          </div>
+
+          <div v-if="estadisticasPlatos.masVendidos.length > 0" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div
+              v-for="(p, idx) in estadisticasPlatos.masVendidos"
+              :key="idx"
+              style="display: flex; flex-direction: column; gap: 0.35rem; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.65rem 0.85rem;"
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span
+                    style="
+                      font-weight: 800;
+                      font-size: 0.75rem;
+                      width: 22px;
+                      height: 22px;
+                      border-radius: 50%;
+                      display: inline-flex;
+                      align-items: center;
+                      justify-content: center;
+                    "
+                    :style="
+                      idx === 0
+                        ? 'background: #fef08a; color: #854d0e;'
+                        : idx === 1
+                        ? 'background: #e2e8f0; color: #475569;'
+                        : idx === 2
+                        ? 'background: #fed7aa; color: #9a3412;'
+                        : 'background: #f1f5f9; color: #64748b;'
+                    "
+                  >
+                    {{ idx + 1 }}°
+                  </span>
+                  <span style="font-weight: 700; font-size: 0.9rem; color: #1e293b;">{{ p.nombre }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span style="font-weight: 800; font-size: 0.95rem; color: #0f172a;">{{ p.cantidad }} pedidos</span>
+                  <Tag :value="`${p.porcentaje}%`" severity="success" rounded style="font-size: 0.72rem;" />
+                </div>
+              </div>
+
+              <!-- Barra de Progreso -->
+              <div style="width: 100%; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden;">
+                <div
+                  style="height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f97316 0%, #ea580c 100%);"
+                  :style="{ width: `${Math.min(100, Math.max(5, p.porcentaje))}%` }"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div v-else style="text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 1.5rem;">
+            Aún no hay suficientes consumos registrados para generar el ranking.
+          </div>
+        </div>
+
+        <!-- Platos con Menor Demanda y Consejos de Cocina -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 800; font-size: 0.95rem; color: #0f172a; display: flex; align-items: center; gap: 0.4rem;">
+              <span>📉 Platos de Menor Rotación</span>
+            </span>
+            <span style="font-size: 0.78rem; font-weight: 700; color: #b45309; background: #fef3c7; padding: 0.2rem 0.5rem; border-radius: 6px;">
+              Precaución en Raciones
+            </span>
+          </div>
+
+          <div v-if="estadisticasPlatos.menosVendidos.length > 0" style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div
+              v-for="(p, idx) in estadisticasPlatos.menosVendidos"
+              :key="idx"
+              style="display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.55rem 0.75rem;"
+            >
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <i class="pi pi-angle-right" style="color: #94a3b8; font-size: 0.8rem;"></i>
+                <span style="font-weight: 600; font-size: 0.88rem; color: #334155;">{{ p.nombre }}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.4rem;">
+                <span style="font-size: 0.85rem; font-weight: 700; color: #64748b;">{{ p.cantidad }} pedidos</span>
+                <span style="font-size: 0.75rem; color: #94a3b8;">({{ p.porcentaje }}%)</span>
+              </div>
+            </div>
+          </div>
+          <div v-else style="text-align: center; color: #94a3b8; font-size: 0.85rem; padding: 1rem;">
+            Registra más menús y ventas para habilitar la comparación de baja demanda.
+          </div>
+
+          <!-- Sugerencia inteligente -->
+          <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 0.75rem 0.9rem; display: flex; align-items: flex-start; gap: 0.6rem; margin-top: auto;">
+            <i class="pi pi-lightbulb" style="color: #2563eb; font-size: 1.1rem; margin-top: 0.1rem;"></i>
+            <p style="margin: 0; font-size: 0.8rem; color: #1e40af; line-height: 1.4;">
+              <strong>Consejo de Cocina:</strong> Asigna entre 35 y 45 raciones para los platos <strong>Top 1-3</strong> y prepara cantidades moderadas (15 a 25) para platos nuevos o de menor rotación.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   </div>

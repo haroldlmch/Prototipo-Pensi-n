@@ -36,9 +36,22 @@ export class DashboardService {
       where: { estado: true },
     });
 
-    const pensionesActivas = await this.pensionRepository.count({
-      where: { estado: 'ACTIVA' },
+    const todasPensiones = await this.pensionRepository.find({
+      relations: { pensionado: true },
+      order: { id: 'DESC' },
     });
+
+    const vistos = new Set<number>();
+    let pensionesActivas = 0;
+    for (const p of todasPensiones) {
+      if (!p.pensionado) continue;
+      if (!vistos.has(p.pensionado.id)) {
+        vistos.add(p.pensionado.id);
+        if (p.estado === 'ACTIVA' && p.pensionado.estado !== false) {
+          pensionesActivas++;
+        }
+      }
+    }
 
     const consumosRegistrados = await this.consumoRepository.count();
     const ventasCasuales = await this.ventaRepository.count();
@@ -325,17 +338,31 @@ export class DashboardService {
         pensionado: true,
       },
       order: {
-        completosDisponibles: 'ASC',
+        id: 'DESC',
       },
     });
 
-    return pensiones.filter(
-      (p) =>
-        p.completosDisponibles <= 5 &&
-        (p.estado === 'ACTIVA' || p.estado === 'AGOTADA') &&
-        p.pensionado &&
-        p.pensionado.estado !== false,
-    );
+    // Garantizar que solo se evalúe la pensión más reciente / única por cada cliente
+    const vistos = new Set<number>();
+    const unicasPorPensionado: Pensione[] = [];
+
+    for (const p of pensiones) {
+      if (!p.pensionado) continue;
+      if (!vistos.has(p.pensionado.id)) {
+        vistos.add(p.pensionado.id);
+        unicasPorPensionado.push(p);
+      }
+    }
+
+    return unicasPorPensionado
+      .filter(
+        (p) =>
+          p.completosDisponibles <= 5 &&
+          (p.estado === 'ACTIVA' || p.estado === 'AGOTADA') &&
+          p.pensionado &&
+          p.pensionado.estado !== false,
+      )
+      .sort((a, b) => a.completosDisponibles - b.completosDisponibles);
   }
 
   async estadisticasPlatos() {

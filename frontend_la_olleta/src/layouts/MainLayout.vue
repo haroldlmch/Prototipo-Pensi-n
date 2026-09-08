@@ -22,23 +22,27 @@ const titulosRuta: Record<string, string> = {
 const tituloActual = computed(() => titulosRuta[route.path] || 'Sistema de Gestión');
 
 // Reloj y fecha en tiempo real
+const diaSemana = ref('');
+const fechaCompleta = ref('');
 const horaActual = ref('');
-const fechaActual = ref('');
 
 const actualizarHoraFecha = () => {
   const ahora = new Date();
+  
+  const dia = ahora.toLocaleDateString('es-ES', { weekday: 'long' });
+  diaSemana.value = dia.charAt(0).toUpperCase() + dia.slice(1);
+  
+  fechaCompleta.value = ahora.toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   horaActual.value = ahora.toLocaleTimeString('es-BO', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
-  });
-
-  fechaActual.value = ahora.toLocaleDateString('es-ES', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
   });
 };
 
@@ -116,10 +120,19 @@ onUnmounted(() => {
             </span>
           </div>
 
-          <!-- Reloj y Fecha -->
-          <div class="datetime-pill">
-            <i class="pi pi-clock" style="font-size: 0.85rem; color: #64748b;"></i>
-            <span class="datetime-text">{{ fechaActual }} · {{ horaActual }}</span>
+          <!-- Widget Fecha y Hora Premium -->
+          <div class="datetime-wrapper">
+            <div class="date-chip">
+              <i class="pi pi-calendar date-icon"></i>
+              <span class="day-text">{{ diaSemana }},</span>
+              <span class="date-text">{{ fechaCompleta }}</span>
+            </div>
+
+            <div class="time-chip">
+              <span class="live-dot"></span>
+              <i class="pi pi-clock time-icon"></i>
+              <span class="time-text">{{ horaActual }}</span>
+            </div>
           </div>
 
           <!-- Perfil Usuario -->
@@ -267,21 +280,71 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.datetime-pill {
+.datetime-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  background: #fbfaf8;
-  border: 1px solid #fed7aa;
-  padding: 0.35rem 0.75rem;
-  border-radius: 9999px;
+  gap: 0.5rem;
 }
 
-.datetime-text {
+.date-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border: 1.5px solid #fed7aa;
+  padding: 0.35rem 0.8rem;
+  border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(234, 88, 12, 0.08);
+}
+
+.date-icon {
+  font-size: 0.85rem;
+  color: #ea580c;
+}
+
+.day-text {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #9a3412;
+}
+
+.date-text {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #57534e;
-  text-transform: capitalize;
+  color: #c2410c;
+}
+
+.time-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1.5px solid #334155;
+  padding: 0.35rem 0.8rem;
+  border-radius: 9999px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #34d399;
+  box-shadow: 0 0 6px #34d399;
+  animation: pulse-dot 1.5s infinite ease-in-out;
+}
+
+.time-icon {
+  font-size: 0.8rem;
+  color: #38bdf8;
+}
+
+.time-text {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #f8fafc;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .user-pill {

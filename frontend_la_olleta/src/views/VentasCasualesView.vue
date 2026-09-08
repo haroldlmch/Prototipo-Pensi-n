@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 
 import Button from 'primevue/button';
 import Calendar from 'primevue/calendar';
@@ -482,7 +483,25 @@ watch([cantidadCompletos, precioUnitario], () => {
   montoTotal.value = cantidadCompletos.value * precioUnitario.value;
 });
 
-onMounted(cargarVentas);
+const route = useRoute();
+
+const procesarQueryParams = () => {
+  if (route.query.nuevaVenta === 'true') {
+    nuevaVenta();
+  }
+};
+
+watch(
+  () => route.query,
+  () => {
+    procesarQueryParams();
+  },
+);
+
+onMounted(async () => {
+  await cargarVentas();
+  procesarQueryParams();
+});
 </script>
 
 <template>

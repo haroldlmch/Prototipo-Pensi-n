@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Menu } from './entities/menu.entity';
@@ -15,8 +15,29 @@ export class MenusService {
     private readonly opcionMenuRepository: Repository<OpcionesMenu>,
   ) {}
 
+  private formatearFecha(fechaStr: string): string {
+    const partes = fechaStr.slice(0, 10).split('-');
+    if (partes.length === 3) {
+      const [anio, mes, dia] = partes;
+      return `${parseInt(dia, 10)}/${parseInt(mes, 10)}/${anio}`;
+    }
+    return fechaStr;
+  }
+
   async create(createMenuDto: CreateMenuDto) {
     const { opciones, ...menuData } = createMenuDto;
+
+    const fechaNormalizada = menuData.fecha.slice(0, 10);
+    const menuExistente = await this.menuRepository.findOne({
+      where: { fecha: fechaNormalizada as any },
+    });
+
+    if (menuExistente) {
+      const fechaFormateada = this.formatearFecha(fechaNormalizada);
+      throw new BadRequestException(
+        `Ya existe un menú del día registrado para la fecha (${fechaFormateada}). Si deseas modificar los platos o raciones, por favor edita el menú existente.`,
+      );
+    }
 
     const cantSopaIni = Number(menuData.cantidadSopaInicial) || 0;
     const cantSopaDisp =
@@ -25,7 +46,7 @@ export class MenusService {
         : cantSopaIni;
 
     const menu = this.menuRepository.create({
-      fecha: menuData.fecha.slice(0, 10) as any,
+      fecha: fechaNormalizada as any,
       sopa: menuData.sopa,
       cantidadSopaInicial: cantSopaIni,
       cantidadSopaDisponible: cantSopaDisp,
@@ -112,7 +133,17 @@ export class MenusService {
     const { opciones, ...menuData } = updateMenuDto;
 
     if (menuData.fecha) {
-      menu.fecha = menuData.fecha.slice(0, 10) as any;
+      const fechaNormalizada = menuData.fecha.slice(0, 10);
+      const menuExistente = await this.menuRepository.findOne({
+        where: { fecha: fechaNormalizada as any },
+      });
+      if (menuExistente && menuExistente.id !== id) {
+        const fechaFormateada = this.formatearFecha(fechaNormalizada);
+        throw new BadRequestException(
+          `Ya existe otro menú del día registrado para la fecha (${fechaFormateada}).`,
+        );
+      }
+      menu.fecha = fechaNormalizada as any;
     }
     if (menuData.sopa) {
       menu.sopa = menuData.sopa;

@@ -57,6 +57,12 @@ export class VentasCasuale {
   })
   opcionMenu?: OpcionesMenu;
 
+  @Column('text', {
+    name: 'detalle_items',
+    nullable: true,
+  })
+  detalleItems?: string;
+
   @CreateDateColumn({
     name: 'fecha_creacion',
   })

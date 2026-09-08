@@ -22,6 +22,7 @@ interface VentaCasual {
   precioUnitario: number | string;
   montoTotal: number | string;
   metodoPago?: string;
+  detalleItems?: string;
   opcionMenu?: {
     id: number;
     nombreSegundo: string;
@@ -42,6 +43,35 @@ const metodoPago = ref('Efectivo');
 const metodosPago = ['Efectivo', 'Pago QR'];
 const mostrarComprobante = ref(false);
 const comprobanteActual = ref<ComprobanteData | null>(null);
+
+const obtenerItemsDetalle = (venta: VentaCasual): { descripcion: string; cantidad: number; precioUnitario: number; subtotal: number }[] => {
+  if (venta.detalleItems) {
+    try {
+      const parsed = JSON.parse(venta.detalleItems);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((it: any) => ({
+          descripcion: it.descripcion || `${it.nombreSegundo || 'Plato'} (${it.tipoPlato || 'Completo'})`,
+          cantidad: Number(it.cantidad) || 1,
+          precioUnitario: Number(it.precioUnitario) || 0,
+          subtotal: Number(it.subtotal) || (Number(it.cantidad) * Number(it.precioUnitario)),
+        }));
+      }
+    } catch (e) {
+      // Ignorar
+    }
+  }
+  const nombrePlato =
+    venta.opcionMenu?.nombreSegundo ||
+    (venta.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
+  return [
+    {
+      descripcion: `${nombrePlato} (${venta.tipoPlato || 'Completo'})`,
+      cantidad: Number(venta.cantidadCompletos) || 1,
+      precioUnitario: Number(venta.precioUnitario) || 0,
+      subtotal: Number(venta.montoTotal) || 0,
+    },
+  ];
+};
 
 type TipoPlato = 'Completo' | 'Solo Segundo' | 'Solo Sopa';
 const tiposPlato: TipoPlato[] = ['Completo', 'Solo Segundo', 'Solo Sopa'];
@@ -328,33 +358,49 @@ const guardarVenta = async () => {
         cantidad: Number(item.cantidad),
         precioUnitario: precioItem,
         subtotal: Number(item.cantidad) * precioItem,
+        idOpcionMenu: item.idOpcionMenu,
+        tipoPlato: item.tipoPlato,
       };
     });
+    const totalPlatos = totalPlatosVenta.value;
     const montoCobrado = totalMontoCalculado.value;
     const metodoUsado = metodoPago.value;
     const fechaVentaStr = formatearFecha(fecha.value);
 
+    const primerTipo = platosVentaForm.value[0]?.tipoPlato || 'Completo';
+    const todosMismoTipo = platosVentaForm.value.every((p) => p.tipoPlato === primerTipo);
+    const tipoFinal = todosMismoTipo ? primerTipo : 'Múltiple';
+    const precioPromedioOPrimero = platosVentaForm.value.length === 1
+      ? (Number(platosVentaForm.value[0]?.precioUnitario) || obtenerPrecioPorTipo(primerTipo))
+      : (montoCobrado / (totalPlatos || 1));
+
     try {
-      for (const item of platosVentaForm.value) {
-        const precioItem = Number(item.precioUnitario) || obtenerPrecioPorTipo(item.tipoPlato);
-        await api.post('/ventas-casuales', {
-          fecha: convertirFechaISO(fecha.value),
-          idOpcionMenu: item.tipoPlato === 'Solo Sopa' ? undefined : item.idOpcionMenu,
-          tipoPlato: item.tipoPlato || 'Completo',
-          cantidadCompletos: Number(item.cantidad),
-          precioUnitario: precioItem,
-          montoTotal: Number(item.cantidad) * precioItem,
-          metodoPago: metodoPago.value,
-        });
-      }
+      const res = await api.post('/ventas-casuales', {
+        fecha: convertirFechaISO(fecha.value),
+        cantidadCompletos: totalPlatos,
+        precioUnitario: precioPromedioOPrimero,
+        montoTotal: montoCobrado,
+        tipoPlato: tipoFinal,
+        metodoPago: metodoUsado,
+        idOpcionMenu: platosVentaForm.value[0]?.tipoPlato === 'Solo Sopa' ? undefined : (platosVentaForm.value[0]?.idOpcionMenu || undefined),
+        detalleItems: JSON.stringify(itemsParaComprobante),
+        items: platosVentaForm.value.map((it) => ({
+          idOpcionMenu: it.tipoPlato === 'Solo Sopa' ? undefined : it.idOpcionMenu,
+          tipoPlato: it.tipoPlato,
+          cantidad: Number(it.cantidad),
+          precioUnitario: Number(it.precioUnitario),
+        })),
+      });
 
       visible.value = false;
       limpiarFormulario();
       await cargarVentas();
 
+      const ventaIdCreada = res.data?.id || (ventas.value[0]?.id || 1);
+
       comprobanteActual.value = {
         tipo: 'VENTA_CASUAL',
-        numeroComprobante: `VEN-${(ventas.value[0]?.id || 1).toString().padStart(5, '0')}`,
+        numeroComprobante: `VEN-${ventaIdCreada.toString().padStart(5, '0')}`,
         fecha: fechaVentaStr,
         hora: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         clienteNombre: 'Cliente Casual',
@@ -373,12 +419,9 @@ const guardarVenta = async () => {
 };
 
 const abrirComprobanteVenta = (venta: VentaCasual) => {
-  const nombrePlato =
-    venta.opcionMenu?.nombreSegundo ||
-    (venta.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
-  const desc = `${nombrePlato} (${venta.tipoPlato || 'Completo'})`;
   const fVenta = formatearFecha(venta.fecha);
   const hVenta = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const itemsFactura = obtenerItemsDetalle(venta);
 
   comprobanteActual.value = {
     tipo: 'VENTA_CASUAL',
@@ -387,14 +430,7 @@ const abrirComprobanteVenta = (venta: VentaCasual) => {
     hora: hVenta,
     clienteNombre: 'Cliente Casual',
     clienteNitCi: 'S/N',
-    items: [
-      {
-        descripcion: desc,
-        cantidad: venta.cantidadCompletos,
-        precioUnitario: Number(venta.precioUnitario),
-        subtotal: Number(venta.montoTotal),
-      },
-    ],
+    items: itemsFactura,
     montoTotal: Number(venta.montoTotal),
     metodoPago: venta.metodoPago || 'Efectivo',
   };
@@ -543,19 +579,30 @@ onMounted(cargarVentas);
           </template>
         </Column>
 
-        <Column header="Plato / Segundo" style="color: #334155; font-weight: 600;">
+        <Column header="Plato(s) / Detalle" style="color: #334155; font-weight: 600;">
           <template #body="slotProps">
+            <div v-if="obtenerItemsDetalle(slotProps.data).length > 1" style="display: flex; flex-direction: column; gap: 0.35rem;">
+              <Tag
+                v-for="(it, idx) in obtenerItemsDetalle(slotProps.data)"
+                :key="idx"
+                :value="`${it.cantidad}x ${it.descripcion}`"
+                severity="info"
+                rounded
+                style="font-size: 0.78rem; font-weight: 700; width: fit-content;"
+              />
+            </div>
             <span
-              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
-              style="color: #64748b; font-style: italic; font-weight: 600; font-size: 0.85rem;"
+              v-else-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              style="color: #0284c7; font-weight: 700; font-size: 0.85rem;"
             >
-              — (Sin segundo)
+              🍲 Sopa del Día
             </span>
             <Tag
               v-else
-              :value="slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo del Día'"
+              :value="obtenerItemsDetalle(slotProps.data)[0]?.descripcion || slotProps.data.opcionMenu?.nombreSegundo || 'Almuerzo del Día'"
               severity="info"
               rounded
+              style="font-size: 0.8rem; font-weight: 700;"
             />
           </template>
         </Column>
@@ -563,7 +610,13 @@ onMounted(cargarVentas);
         <Column header="Tipo" style="width: 140px; text-align: center;">
           <template #body="slotProps">
             <Tag
-              v-if="slotProps.data.tipoPlato === 'Solo Sopa'"
+              v-if="slotProps.data.tipoPlato === 'Múltiple' || obtenerItemsDetalle(slotProps.data).length > 1"
+              value="Múltiple"
+              rounded
+              style="font-size: 0.78rem; font-weight: 700; background: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe;"
+            />
+            <Tag
+              v-else-if="slotProps.data.tipoPlato === 'Solo Sopa'"
               value="Solo Sopa"
               rounded
               style="font-size: 0.78rem; font-weight: 700; background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;"

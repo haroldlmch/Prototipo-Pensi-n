@@ -632,7 +632,8 @@ onMounted(async () => {
             <input
               v-model="fechaPago"
               type="date"
-              class="input-fecha-custom"
+              disabled
+              class="input-fecha-custom input-fecha-disabled"
             />
           </div>
 
@@ -669,6 +670,7 @@ onMounted(async () => {
               currency="BOB"
               locale="es-BO"
               :min="0"
+              disabled
               fluid
             />
           </div>
@@ -682,6 +684,7 @@ onMounted(async () => {
             currency="BOB"
             locale="es-BO"
             :min="0"
+            disabled
             fluid
           />
         </div>
@@ -777,5 +780,11 @@ onMounted(async () => {
 
 .input-fecha-custom:focus {
   border-color: #3b82f6;
+}
+
+.input-fecha-disabled {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+  color: #64748b;
 }
 </style>

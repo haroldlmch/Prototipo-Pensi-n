@@ -34,42 +34,70 @@ private readonly pensionadoRepository: Repository<Pensionado>,
       throw new NotFoundException('Pensionado no encontrado');
     }
 
+    // 1. Buscar si el pensionado ya cuenta con una pensión registrada en el sistema
+    let pensionExistente: Pensione | null = null;
     if (createPensioneDto.idPensionAnterior) {
-      const pensionAnterior = await this.pensioneRepository.findOne({
+      pensionExistente = await this.pensioneRepository.findOne({
         where: { id: createPensioneDto.idPensionAnterior },
+        relations: { pensionado: true },
       });
-      if (pensionAnterior) {
-        pensionAnterior.estado = 'AGOTADA';
-        pensionAnterior.completosDisponibles = 0;
-        await this.pensioneRepository.save(pensionAnterior);
-      }
     }
 
+    if (!pensionExistente) {
+      pensionExistente = await this.pensioneRepository.findOne({
+        where: { pensionado: { id: pensionado.id } },
+        relations: { pensionado: true },
+        order: { id: 'DESC' },
+      });
+    }
+
+    // 2. Si ya existe, renovar/actualizar la pensión existente para mantener un único registro activo por cliente
+    if (pensionExistente) {
+      pensionExistente.fechaInicio = createPensioneDto.fechaInicio.slice(0, 10) as any;
+      pensionExistente.cantidadCompletos = createPensioneDto.cantidadCompletos;
+      pensionExistente.completosDisponibles = createPensioneDto.completosDisponibles;
+      pensionExistente.estado = 'ACTIVA';
+      pensionExistente.pensionado = pensionado;
+
+      return await this.pensioneRepository.save(pensionExistente);
+    }
+
+    // 3. Si es la primera vez que se registra una pensión para este cliente, crearla
     const pension = this.pensioneRepository.create({
       fechaInicio: createPensioneDto.fechaInicio.slice(0, 10) as any,
       cantidadCompletos: createPensioneDto.cantidadCompletos,
       completosDisponibles: createPensioneDto.completosDisponibles,
-      estado: createPensioneDto.estado,
+      estado: createPensioneDto.estado || 'ACTIVA',
       pensionado,
     });
 
     return await this.pensioneRepository.save(pension);
   }
 
-async findAll() {
+  async findAll() {
+    const all = await this.pensioneRepository.find({
+      relations: {
+        pensionado: true,
+      },
+      order: {
+        id: 'DESC',
+      },
+    });
 
+    // Garantizar que solo se liste un único registro de pensión por cada cliente
+    const vistos = new Set<number>();
+    const unicasPorPensionado: Pensione[] = [];
 
-return await this.pensioneRepository.find({
-  relations: {
-    pensionado: true,
-  },
-  order: {
-    id: 'DESC',
-  },
-});
+    for (const p of all) {
+      if (!p.pensionado) continue;
+      if (!vistos.has(p.pensionado.id)) {
+        vistos.add(p.pensionado.id);
+        unicasPorPensionado.push(p);
+      }
+    }
 
-
-}
+    return unicasPorPensionado;
+  }
 
 async findOne(id: number) {
 

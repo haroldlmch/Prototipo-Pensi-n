@@ -39,4 +39,16 @@ export class CreateVentasCasualeDto {
   @IsOptional()
   @IsInt({ message: 'El ID de la opción de menú debe ser un número entero válido.' })
   idOpcionMenu?: number;
+
+  @IsOptional()
+  @IsString({ message: 'El detalle de items debe ser un texto válido.' })
+  detalleItems?: string;
+
+  @IsOptional()
+  items?: Array<{
+    idOpcionMenu?: number;
+    tipoPlato?: string;
+    cantidad: number;
+    precioUnitario?: number;
+  }>;
 }

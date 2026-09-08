@@ -1002,6 +1002,7 @@ onMounted(async () => {
             <input
               v-model="fechaPago"
               type="date"
+              disabled
               style="
                 width: 100%;
                 box-sizing: border-box;
@@ -1010,9 +1011,10 @@ onMounted(async () => {
                 border-radius: 6px;
                 font-family: inherit;
                 font-size: 0.95rem;
-                color: #334155;
+                color: #64748b;
+                background-color: #f1f5f9;
+                cursor: not-allowed;
                 outline: none;
-                transition: border-color 0.2s ease;
               "
             />
           </div>
@@ -1047,6 +1049,7 @@ onMounted(async () => {
               currency="BOB"
               locale="es-BO"
               :min="0"
+              disabled
               fluid
             />
           </div>
@@ -1060,6 +1063,7 @@ onMounted(async () => {
             currency="BOB"
             locale="es-BO"
             :min="0"
+            disabled
             fluid
           />
         </div>

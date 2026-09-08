@@ -293,146 +293,172 @@ export class WhatsappService implements OnModuleInit {
     items: { opcionMenu: OpcionesMenu; cantidad: number }[];
     totalCantidad: number;
     tieneSopa: boolean;
+    tipoPlato: 'Completo' | 'Solo Segundo' | 'Solo Sopa';
     observacionSopas: string;
+    faltaEspecificarSegundo?: boolean;
   } {
-    // 1. Detectar si el cliente pidió explícitamente sopa / completo o si pidió explícitamente solo segundo
-    const pideSoloSegundo = /sin\s*sopas?|solo\s*segundos?|solamente\s*segundos?/i.test(rawText);
-    const pideCompletoOSopa = /(\d+)\s*sopas?|con\s*sopas?|\bsopas?\b|\bcompletos?\b/i.test(rawText);
+    const rawLower = rawText.toLowerCase().trim();
 
-    let tieneSopa = false;
-    let observacionSopas = 'No (Solo Segundo)';
+    // 1. Detectar si el texto es una orden genérica que NO especifica ningún segundo (ej. "completo", "1 completo", "2 completos", "un completo", "almuerzo", "segundo")
+    const esGenericoSinSegundo = /^(?:un|uno|una|dos|tres|cuatro|\d+)?\s*(?:de\s+)?(?:completos?|almuerzos?|platos?|segundos?|solo\s*segundos?|solamente\s*segundos?)(?:\s*(?:por\s*favor|gracias|completo|completos))?$/i.test(rawLower);
 
-    if (pideSoloSegundo) {
-      tieneSopa = false;
-      observacionSopas = 'No (Solo Segundo)';
-    } else if (pideCompletoOSopa) {
-      tieneSopa = true;
-      const countSopaMatch = rawText.match(/(\d+)\s*sopas?/i);
-      if (countSopaMatch && countSopaMatch[1]) {
-        observacionSopas = `Sí, ${countSopaMatch[1]} sopa(s) (${nombreSopaMenu || 'Sopa del día'})`;
-      } else {
-        observacionSopas = nombreSopaMenu ? `Sí (${nombreSopaMenu})` : 'Sí (Completo con Sopa)';
-      }
-    } else {
-      // Regla: Si no escribe "sopa" ni "completo", NO se asume sopa, es solo segundo
-      tieneSopa = false;
-      observacionSopas = 'No (Solo Segundo)';
-    }
+    // 2. Detectar si pide explícitamente solo segundo, solo sopa o completo
+    const pideSoloSegundo = /sin\s*sopas?|solo\s*segundos?|solamente\s*segundos?/i.test(rawLower);
+    const pideSoloSopaExp = /solo\s*(?:\d+\s*)?sopas?|solamente\s*(?:\d+\s*)?sopas?|(\d+)\s*solo\s*sopas?/i.test(rawLower);
 
-    // 2. Limpiar palabras clave de sopa/completo
-    const cleanText = rawText
-      .replace(/(\d+)\s*sopas?/gi, ' ')
-      .replace(/sin\s*sopas?|con\s*sopas?|solo\s*segundos?|solamente\s*segundos?|\bsopas?\b|\bcompletos?\b/gi, ' ')
+    // Extraer cantidad de sopas mencionadas si las hay (ej. "15 sopas", "2 sopas", "sopa")
+    const matchCantSopa = rawLower.match(/(\d+)\s*(?:de\s+)?sopas?/i);
+    const cantidadSopasDetectada = matchCantSopa && matchCantSopa[1] ? parseInt(matchCantSopa[1], 10) : (rawLower.includes('sopa') ? 1 : 0);
+
+    // 3. Limpiar palabras de sopa y genéricas de completo para ver si quedan platos fuertes
+    const cleanTextSinSopa = rawText
+      .replace(/(\d+)\s*(?:de\s+)?sopas?/gi, ' ')
+      .replace(/sin\s*sopas?|con\s*sopas?|solo\s*segundos?|solamente\s*segundos?|solo\s*sopas?|solamente\s*sopas?|\bsopas?\b|\bcompletos?\b/gi, ' ')
       .trim();
 
-    // 3. Separar por líneas, comas, signos +, o conjunciones ' y ' / ' e '
-    const lineas = cleanText
+    // 4. Parsear opciones de platos fuertes en cleanTextSinSopa
+    const lineas = cleanTextSinSopa
       .split(/[\n,+]|\s+(?:y|e)\s+/i)
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
     const itemsMap = new Map<number, { opcionMenu: OpcionesMenu; cantidad: number }>();
 
-    for (const linea of lineas) {
-      let cantidad = 1;
-      let opcionEncontrada: OpcionesMenu | null = null;
-      const lineaTrim = linea.trim();
+    // Si NO es un comando genérico de "1 completo", intentar buscar coincidencias numéricas o de nombres
+    if (!esGenericoSinSegundo) {
+      for (const linea of lineas) {
+        let cantidad = 1;
+        let opcionEncontrada: OpcionesMenu | null = null;
+        const lineaTrim = linea.trim();
 
-      // Caso 1: Solo un número (ej. "1", "2", "3", "#1", "#2", "opcion 1", "opción 2", "segundo 1", "segundo 2", "plato 1")
-      const soloNumeroMatch = lineaTrim.match(/^(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
-      if (soloNumeroMatch && soloNumeroMatch[1]) {
-        const num = parseInt(soloNumeroMatch[1], 10);
-        if (num >= 1 && num <= menuOpciones.length) {
-          opcionEncontrada = menuOpciones[num - 1] || null;
-          cantidad = 1;
-        } else if (menuOpciones.length > 0) {
-          cantidad = num;
-          opcionEncontrada = menuOpciones[0] || null;
-        }
-      }
-
-      // Caso 2: Cantidad + Opción numérica (ej. "2 del 1", "2 de la 1", "2 de la opcion 2", "2x1", "2*2", "2 opcion 1", "2 #1", "2 del 2")
-      if (!opcionEncontrada) {
-        const cantYNumOpcionMatch = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
-        if (cantYNumOpcionMatch && cantYNumOpcionMatch[1] && cantYNumOpcionMatch[2]) {
-          cantidad = parseInt(cantYNumOpcionMatch[1], 10) || 1;
-          const numOpc = parseInt(cantYNumOpcionMatch[2], 10);
-          if (numOpc >= 1 && numOpc <= menuOpciones.length) {
-            opcionEncontrada = menuOpciones[numOpc - 1] || null;
+        // Caso 1: Solo un número (ej. "1", "2", "3", "#1", "#2", "opcion 1", "opción 2", "segundo 1", "segundo 2", "plato 1")
+        const soloNumeroMatch = lineaTrim.match(/^(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
+        if (soloNumeroMatch && soloNumeroMatch[1]) {
+          const num = parseInt(soloNumeroMatch[1], 10);
+          if (num >= 1 && num <= menuOpciones.length) {
+            opcionEncontrada = menuOpciones[num - 1] || null;
+            cantidad = 1;
           }
         }
-      }
 
-      // Caso 3: Cantidad al inicio + Nombre de plato (ej. "2 chuletas", "2x chuleta", "2 de saice")
-      let textoNombrePlato = lineaTrim;
-      if (!opcionEncontrada) {
-        const matchInicio = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(.+)$/i);
-        if (matchInicio && matchInicio[1] && matchInicio[2]) {
-          cantidad = parseInt(matchInicio[1], 10) || 1;
-          textoNombrePlato = matchInicio[2].trim();
-        } else {
-          // Patrón: Nombre + Cantidad al final (ej. "chuleta x2", "chuleta 2", "saice: 3")
-          const matchFin = lineaTrim.match(/^(.+?)\s*(?:x|\*|\:)?\s*(\d+)$/i);
-          if (matchFin && matchFin[1] && matchFin[2]) {
-            if (isNaN(Number(matchFin[1].trim()))) {
-              cantidad = parseInt(matchFin[2], 10) || 1;
-              textoNombrePlato = matchFin[1].trim();
+        // Caso 2: Cantidad + Opción numérica (ej. "2 del 1", "2 de la 1", "2 de la opcion 2", "2x1", "2*2", "2 opcion 1", "2 #1", "2 del 2")
+        if (!opcionEncontrada) {
+          const cantYNumOpcionMatch = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(?:opcion|opción|segundo|plato|#)?\s*(\d+)$/i);
+          if (cantYNumOpcionMatch && cantYNumOpcionMatch[1] && cantYNumOpcionMatch[2]) {
+            cantidad = parseInt(cantYNumOpcionMatch[1], 10) || 1;
+            const numOpc = parseInt(cantYNumOpcionMatch[2], 10);
+            if (numOpc >= 1 && numOpc <= menuOpciones.length) {
+              opcionEncontrada = menuOpciones[numOpc - 1] || null;
             }
           }
         }
 
-        // Buscar coincidencia por nombre de plato
-        const lowerTexto = textoNombrePlato.toLowerCase().trim();
-        if (lowerTexto) {
-          // A) Coincidencia directa / subcadena
-          opcionEncontrada = menuOpciones.find((op) => {
-            const nomLower = op.nombreSegundo.toLowerCase();
-            return nomLower.includes(lowerTexto) || lowerTexto.includes(nomLower);
-          }) || null;
+        // Caso 3: Cantidad al inicio + Nombre de plato (ej. "2 chuletas", "2x chuleta", "2 de saice")
+        let textoNombrePlato = lineaTrim;
+        if (!opcionEncontrada) {
+          const matchInicio = lineaTrim.match(/^(\d+)\s*(?:x|\*|del?|de\s+la|de)?\s*(.+)$/i);
+          if (matchInicio && matchInicio[1] && matchInicio[2]) {
+            cantidad = parseInt(matchInicio[1], 10) || 1;
+            textoNombrePlato = matchInicio[2].trim();
+          } else {
+            // Patrón: Nombre + Cantidad al final (ej. "chuleta x2", "chuleta 2", "saice: 3")
+            const matchFin = lineaTrim.match(/^(.+?)\s*(?:x|\*|\:)?\s*(\d+)$/i);
+            if (matchFin && matchFin[1] && matchFin[2]) {
+              if (isNaN(Number(matchFin[1].trim()))) {
+                cantidad = parseInt(matchFin[2], 10) || 1;
+                textoNombrePlato = matchFin[1].trim();
+              }
+            }
+          }
 
-          // B) Coincidencia por palabras individuales
-          if (!opcionEncontrada) {
-            const palabras = lowerTexto.split(/\s+/).filter((w) => w.length > 2);
-            for (const pal of palabras) {
-              const matchPal = menuOpciones.find((op) => op.nombreSegundo.toLowerCase().includes(pal));
-              if (matchPal) {
-                opcionEncontrada = matchPal;
-                break;
+          // Buscar coincidencia por nombre de plato
+          const lowerTexto = textoNombrePlato.toLowerCase().trim();
+          if (lowerTexto) {
+            // A) Coincidencia directa / subcadena
+            opcionEncontrada = menuOpciones.find((op) => {
+              const nomLower = op.nombreSegundo.toLowerCase();
+              return nomLower.includes(lowerTexto) || lowerTexto.includes(nomLower);
+            }) || null;
+
+            // B) Coincidencia por palabras individuales
+            if (!opcionEncontrada) {
+              const palabras = lowerTexto.split(/\s+/).filter((w) => w.length > 2);
+              for (const pal of palabras) {
+                const matchPal = menuOpciones.find((op) => op.nombreSegundo.toLowerCase().includes(pal));
+                if (matchPal) {
+                  opcionEncontrada = matchPal;
+                  break;
+                }
               }
             }
           }
         }
-      }
 
-      // Si se encontró opción válida, acumular en el mapa
-      if (opcionEncontrada) {
-        if (itemsMap.has(opcionEncontrada.id)) {
-          itemsMap.get(opcionEncontrada.id)!.cantidad += cantidad;
-        } else {
-          itemsMap.set(opcionEncontrada.id, {
-            opcionMenu: opcionEncontrada,
-            cantidad,
-          });
+        // Si se encontró opción válida, acumular en el mapa
+        if (opcionEncontrada) {
+          if (itemsMap.has(opcionEncontrada.id)) {
+            itemsMap.get(opcionEncontrada.id)!.cantidad += cantidad;
+          } else {
+            itemsMap.set(opcionEncontrada.id, {
+              opcionMenu: opcionEncontrada,
+              cantidad,
+            });
+          }
         }
       }
     }
 
-    // Fallback: Si no se pudo parsear ninguna opción pero hay opciones en el menú, usar la primera opción
-    if (itemsMap.size === 0 && menuOpciones.length > 0) {
-      itemsMap.set(menuOpciones[0].id, {
-        opcionMenu: menuOpciones[0],
-        cantidad: 1,
-      });
+    const items = Array.from(itemsMap.values());
+
+    // Caso A: El cliente pidió ÚNICAMENTE SOPAS (ej. "#pedido 15 sopas", "#pedido solo sopa", "#pedido 2 de sopa")
+    if ((items.length === 0 && cantidadSopasDetectada > 0 && !esGenericoSinSegundo) || (pideSoloSopaExp && items.length === 0)) {
+      const cantSopasFinal = cantidadSopasDetectada > 0 ? cantidadSopasDetectada : 1;
+      return {
+        items: [],
+        totalCantidad: cantSopasFinal,
+        tieneSopa: true,
+        tipoPlato: 'Solo Sopa',
+        observacionSopas: `${cantSopasFinal}x ${nombreSopaMenu ? nombreSopaMenu : 'Sopa del día'} (Solo Sopa)`,
+        faltaEspecificarSegundo: false,
+      };
     }
 
-    const items = Array.from(itemsMap.values());
+    // Caso B: El cliente escribió algo genérico (ej. "1 completo", "completo", "2 completos", "almuerzo") o no se reconoció ningún plato
+    if (items.length === 0) {
+      return {
+        items: [],
+        totalCantidad: 0,
+        tieneSopa: true,
+        tipoPlato: 'Completo',
+        observacionSopas: '',
+        faltaEspecificarSegundo: true,
+      };
+    }
+
     const totalCantidad = items.reduce((sum, item) => sum + item.cantidad, 0);
 
+    if (pideSoloSegundo) {
+      return {
+        items,
+        totalCantidad,
+        tieneSopa: false,
+        tipoPlato: 'Solo Segundo',
+        observacionSopas: 'No (Solo Segundo)',
+        faltaEspecificarSegundo: false,
+      };
+    }
+
+    // Por defecto para pedidos con segundo: Almuerzo Completo (Sopa + Segundo)
+    const descSopa = nombreSopaMenu ? `Sí (${nombreSopaMenu})` : 'Sí (Completo con Sopa)';
     return {
       items,
       totalCantidad,
-      tieneSopa,
-      observacionSopas,
+      tieneSopa: true,
+      tipoPlato: 'Completo',
+      observacionSopas: cantidadSopasDetectada > 0 && cantidadSopasDetectada !== totalCantidad
+        ? `${cantidadSopasDetectada}x ${nombreSopaMenu || 'Sopa del día'}`
+        : descSopa,
+      faltaEspecificarSegundo: false,
     };
   }
 
@@ -491,7 +517,7 @@ export class WhatsappService implements OnModuleInit {
   ) {
     if (!pedidoDetalle) {
       await this.sock?.sendMessage(remoteJid, {
-        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1 salpicon, 1 chuleta, 2 sopas*`,
+        text: `⚠️ *Formato incorrecto*\nPor favor especifica tu pedido. Ejemplo:\n*#pedido 1 salpicon, 1 chuleta* o *#pedido 2 sopas*`,
         mentions: [mentionJid],
       });
       return;
@@ -574,25 +600,54 @@ Por favor renueva tu plan en administración.
       return;
     }
 
-    // 4. Parsear el pedido múltiple (cantidades y platos)
+    // 4. Parsear el pedido múltiple (cantidades, platos, sopas)
     const parseResult = this.parsePedido(pedidoDetalle, opcionesDisponibles, menu?.sopa);
 
-    if (parseResult.items.length === 0 || parseResult.totalCantidad <= 0) {
+    // 4.1. Si el cliente solo puso "#pedido 1 completo" o "#pedido completo" sin especificar el segundo
+    if (parseResult.faltaEspecificarSegundo) {
+      const opcionesTexto = opcionesDisponibles
+        .map((op, idx) => `  *${idx + 1}.* ${op.nombreSegundo}`)
+        .join('\n');
+      const sopaTexto = menu?.sopa ? `🍲 *Sopa del día:* ${menu.sopa}\n` : '';
+
+      const mensajeAclaracion =
+`⚠️ *Por favor especifica tu plato fuerte / segundo*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Para confirmar tu pedido, debes indicar qué segundo deseas del menú de hoy:
+
+${sopaTexto}🍽️ *Segundos disponibles:*
+${opcionesTexto}
+
+👉 *Ejemplos de pedido:*
+• \`#pedido 1\` o \`#pedido ${opcionesDisponibles[0]?.nombreSegundo || 'segundo'}\`
+• \`#pedido 1 ${opcionesDisponibles[0]?.nombreSegundo || 'segundo'} completo\`
+• \`#pedido 2 de la opción 1\`
+• \`#pedido 1 sopa\` _(si solo deseas sopa)_
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
       await this.sock?.sendMessage(remoteJid, {
-        text: `⚠️ No se pudo reconocer los platos solicitados. Ejemplo de formato:\n*#pedido 1 salpicon, 1 chuleta, 1 saice*`,
+        text: mensajeAclaracion,
         mentions: [mentionJid],
       });
       return;
     }
 
-    // 5. Verificar si el saldo de la pensión alcanza para todos los platos pedidos
+    if (parseResult.totalCantidad <= 0) {
+      await this.sock?.sendMessage(remoteJid, {
+        text: `⚠️ No se pudo reconocer los platos solicitados. Ejemplo de formato:\n*#pedido 1 salpicon, 1 chuleta* o *#pedido 2 sopas*`,
+        mentions: [mentionJid],
+      });
+      return;
+    }
+
+    // 5. Verificar si el saldo de la pensión alcanza para todos los platos/sopas pedidos
     if (pension.completosDisponibles < parseResult.totalCantidad) {
-      this.logger.warn(`Pensionado ${pensionado.nombreCompleto} intentó pedir ${parseResult.totalCantidad} platos pero solo tiene ${pension.completosDisponibles} disponibles.`);
+      this.logger.warn(`Pensionado ${pensionado.nombreCompleto} intentó pedir ${parseResult.totalCantidad} almuerzos pero solo tiene ${pension.completosDisponibles} disponibles.`);
       await this.sock?.sendMessage(remoteJid, {
         text:
 `⚠️ *L'OLLETA - SALDO INSUFICIENTE*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Hola *${pensionado.nombreCompleto}*, solicitaste *${parseResult.totalCantidad} almuerzos*, pero solo tienes *${pension.completosDisponibles} almuerzo(s) disponible(s)* en tu pensión activa.
+Hola *${pensionado.nombreCompleto}*, solicitaste *${parseResult.totalCantidad} ${parseResult.tipoPlato === 'Solo Sopa' ? 'sopa(s)' : 'almuerzo(s)'}*, pero solo tienes *${pension.completosDisponibles} almuerzo(s) disponible(s)* en tu pensión activa.
 
 Por favor ajusta la cantidad o renueva tu plan en administración.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -603,16 +658,30 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
 
     // 6. Registrar Consumos en la Base de Datos
     try {
-      for (const item of parseResult.items) {
+      if (parseResult.tipoPlato === 'Solo Sopa' || parseResult.items.length === 0) {
+        // Pedido de solo sopa
         await this.consumosService.create({
           idPension: pension.id,
-          idOpcionMenu: item.opcionMenu.id,
-          cantidadCompletos: item.cantidad,
+          idOpcionMenu: undefined,
+          cantidadCompletos: parseResult.totalCantidad,
           tipoConsumo: 'WHATSAPP',
-          tipoPlato: parseResult.tieneSopa ? 'Completo' : 'Solo Segundo',
+          tipoPlato: 'Solo Sopa',
           estadoEntrega: 'EN_ESPERA',
           fecha: hoyStr,
         });
+      } else {
+        // Pedido con segundos
+        for (const item of parseResult.items) {
+          await this.consumosService.create({
+            idPension: pension.id,
+            idOpcionMenu: item.opcionMenu.id,
+            cantidadCompletos: item.cantidad,
+            tipoConsumo: 'WHATSAPP',
+            tipoPlato: parseResult.tipoPlato,
+            estadoEntrega: 'EN_ESPERA',
+            fecha: hoyStr,
+          });
+        }
       }
 
       // Obtener saldo actualizado
@@ -623,13 +692,13 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
         ? pensionActualizada.completosDisponibles
         : pension.completosDisponibles - parseResult.totalCantidad;
 
-      this.logger.log(`✅ Pedido múltiple (${parseResult.totalCantidad} almuerzos) registrado para ${pensionado.nombreCompleto}. Saldo restante: ${saldoRestante}`);
+      this.logger.log(`✅ Pedido (${parseResult.totalCantidad} ${parseResult.tipoPlato}) registrado para ${pensionado.nombreCompleto}. Saldo restante: ${saldoRestante}`);
 
       // 7. Enviar mensaje de confirmación por WhatsApp
       const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const detallePlatosTexto = parseResult.items
-        .map((it) => `  • ${it.cantidad}x ${it.opcionMenu.nombreSegundo}`)
-        .join('\n');
+      const detallePlatosTexto = parseResult.items.length > 0
+        ? parseResult.items.map((it) => `  • ${it.cantidad}x ${it.opcionMenu.nombreSegundo}`).join('\n')
+        : '';
 
       const detalleSopaTexto = parseResult.observacionSopas;
 
@@ -639,9 +708,8 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
 ✅ *Estado:* Registrado en el sistema
 👤 *Pensionado:* ${pensionado.nombreCompleto}
 
-📋 *Detalle del Pedido (${parseResult.totalCantidad} almuerzo${parseResult.totalCantidad > 1 ? 's' : ''}):*
-${detallePlatosTexto}
-🍲 *Sopa:* ${detalleSopaTexto}
+📋 *Detalle del Pedido (${parseResult.totalCantidad} ${parseResult.tipoPlato === 'Solo Sopa' ? 'sopa' + (parseResult.totalCantidad > 1 ? 's' : '') : 'almuerzo' + (parseResult.totalCantidad > 1 ? 's' : '')}):*
+${detallePlatosTexto ? detallePlatosTexto + '\n' : ''}🍲 *Sopa:* ${detalleSopaTexto}
 
 📊 *Almuerzos descontados:* ${parseResult.totalCantidad}
 📊 *Almuerzos restantes:* ${saldoRestante}
@@ -714,43 +782,28 @@ Hola *${pensionado.nombreCompleto}*, no tienes ningún pedido registrado para el
     }
 
     try {
-      // 2. Agrupar la cantidad de platos a devolver y los nombres de los platos cancelados
+      // 2. Cancelar cada consumo usando consumosService.remove para devolver platos a la pensión y stock al menú (segundo y sopa)
       let totalPlatosDevueltos = 0;
       const platosCanceladosDetalle: string[] = [];
 
-      // Mapear platos por pensión para devolver el saldo exactamente a su pensión correspondiente
-      const platosPorPension = new Map<number, { pension: Pensione; cantidad: number }>();
-
       for (const c of consumosHoy) {
         totalPlatosDevueltos += c.cantidadCompletos;
-        const nombrePlato = c.opcionMenu?.nombreSegundo || 'Plato del día';
-        platosCanceladosDetalle.push(`  • ${c.cantidadCompletos}x ${nombrePlato}`);
-
-        if (c.pension) {
-          const actual = platosPorPension.get(c.pension.id) || { pension: c.pension, cantidad: 0 };
-          actual.cantidad += c.cantidadCompletos;
-          platosPorPension.set(c.pension.id, actual);
-        }
+        const nombrePlato = c.opcionMenu?.nombreSegundo || (c.tipoPlato === 'Solo Sopa' ? 'Sopa del día' : 'Plato del día');
+        const detalleTipo = c.tipoPlato ? ` (${c.tipoPlato})` : '';
+        platosCanceladosDetalle.push(`  • ${c.cantidadCompletos}x ${nombrePlato}${detalleTipo}`);
+        await this.consumosService.remove(c.id);
       }
 
-      // 3. Restaurar los platos en las pensiones correspondientes y asegurar que estén ACTIVAS
-      let nuevoSaldoDisponible = 0;
-      for (const [pensionId, data] of platosPorPension.entries()) {
-        const pensionDB = await this.pensionRepository.findOne({ where: { id: pensionId } });
-        if (pensionDB) {
-          pensionDB.completosDisponibles += data.cantidad;
-          pensionDB.estado = 'ACTIVA';
-          await this.pensionRepository.save(pensionDB);
-          nuevoSaldoDisponible = pensionDB.completosDisponibles;
-        }
-      }
+      // 3. Obtener saldo actualizado de la pensión activa
+      const pensionDB = await this.pensionRepository.findOne({
+        where: { pensionado: { id: pensionado.id }, estado: 'ACTIVA' },
+        order: { id: 'DESC' },
+      });
+      const nuevoSaldoDisponible = pensionDB?.completosDisponibles || 0;
 
-      // 4. Eliminar los registros de consumos de la base de datos
-      await this.consumoRepository.remove(consumosHoy);
+      this.logger.log(`🗑️ Pedido cancelado para ${pensionado.nombreCompleto}: ${totalPlatosDevueltos} platos devueltos a la pensión y stock restaurado. Nuevo saldo: ${nuevoSaldoDisponible}`);
 
-      this.logger.log(`🗑️ Pedido cancelado para ${pensionado.nombreCompleto}: ${totalPlatosDevueltos} platos devueltos a la pensión. Nuevo saldo: ${nuevoSaldoDisponible}`);
-
-      // 5. Enviar mensaje de confirmación por WhatsApp
+      // 4. Enviar mensaje de confirmación por WhatsApp
       const horaActual = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       const replyMessage =
 `🚫 *L'OLLETA - PEDIDO CANCELADO*

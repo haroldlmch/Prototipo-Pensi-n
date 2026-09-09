@@ -50,23 +50,32 @@ const obtenerItemsDetalle = (venta: VentaCasual): { descripcion: string; cantida
     try {
       const parsed = JSON.parse(venta.detalleItems);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.map((it: any) => ({
-          descripcion: it.descripcion || `${it.nombreSegundo || 'Plato'} (${it.tipoPlato || 'Completo'})`,
-          cantidad: Number(it.cantidad) || 1,
-          precioUnitario: Number(it.precioUnitario) || 0,
-          subtotal: Number(it.subtotal) || (Number(it.cantidad) * Number(it.precioUnitario)),
-        }));
+        return parsed.map((it: any) => {
+          let desc = it.descripcion;
+          if (it.tipoPlato === 'Solo Sopa') {
+            desc = desc && desc.toLowerCase().includes('sopa') ? desc : 'Sopa del Día';
+          } else if (!desc) {
+            desc = `${it.nombreSegundo || 'Plato'} (${it.tipoPlato || 'Completo'})`;
+          }
+          return {
+            descripcion: desc,
+            cantidad: Number(it.cantidad) || 1,
+            precioUnitario: Number(it.precioUnitario) || 0,
+            subtotal: Number(it.subtotal) || (Number(it.cantidad) * Number(it.precioUnitario)),
+          };
+        });
       }
     } catch (e) {
       // Ignorar
     }
   }
   const nombrePlato =
-    venta.opcionMenu?.nombreSegundo ||
-    (venta.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
+    venta.tipoPlato === 'Solo Sopa'
+      ? 'Sopa del Día'
+      : (venta.opcionMenu?.nombreSegundo || 'Almuerzo del Día');
   return [
     {
-      descripcion: `${nombrePlato} (${venta.tipoPlato || 'Completo'})`,
+      descripcion: venta.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : `${nombrePlato} (${venta.tipoPlato || 'Completo'})`,
       cantidad: Number(venta.cantidadCompletos) || 1,
       precioUnitario: Number(venta.precioUnitario) || 0,
       subtotal: Number(venta.montoTotal) || 0,
@@ -156,6 +165,11 @@ const quitarPlatoVenta = (index: number) => {
 
 const onTipoPlatoChange = (item: ItemPlatoVenta) => {
   item.precioUnitario = obtenerPrecioPorTipo(item.tipoPlato);
+  if (item.tipoPlato === 'Solo Sopa') {
+    item.idOpcionMenu = null;
+  } else if (!item.idOpcionMenu && todasLasOpciones.value.length > 0) {
+    item.idOpcionMenu = todasLasOpciones.value[0]?.id ?? null;
+  }
 };
 
 const onTipoPlatoFormChange = () => {
@@ -211,6 +225,8 @@ const obtenerMensajeError = (error: unknown) => {
 
 const convertirFechaISO = (valor: string) => valor.slice(0, 10);
 
+const sopaHoy = ref('');
+
 const cargarVentas = async () => {
   cargando.value = true;
   errorMensaje.value = '';
@@ -230,12 +246,16 @@ const cargarVentas = async () => {
       precioCasualSugerido.value = precioCasualCompleto.value;
     }
 
-    // Obtener menú de hoy para opciones de platos
+    // Obtener menú de hoy para opciones de platos y sopa
     const hoyStr = obtenerFechaLocal();
     const mHoy = menusResponse.data.find((m: any) => (m.fecha || '').slice(0, 10) === hoyStr);
-    if (mHoy && mHoy.opcionesMenu && mHoy.opcionesMenu.length > 0) {
-      todasLasOpciones.value = mHoy.opcionesMenu;
+    if (mHoy) {
+      sopaHoy.value = mHoy.sopa || '';
+      if (mHoy.opcionesMenu && mHoy.opcionesMenu.length > 0) {
+        todasLasOpciones.value = mHoy.opcionesMenu;
+      }
     } else if (menusResponse.data.length > 0) {
+      sopaHoy.value = menusResponse.data[0].sopa || '';
       todasLasOpciones.value = menusResponse.data[0].opcionesMenu || [];
     }
   } catch (error) {
@@ -351,9 +371,20 @@ const guardarVenta = async () => {
     errorMensaje.value = '';
 
     const itemsParaComprobante = platosVentaForm.value.map((item) => {
-      const opc = todasLasOpciones.value.find((o) => o.id === item.idOpcionMenu);
-      const nombre = opc?.nombreSegundo || (item.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
       const precioItem = Number(item.precioUnitario) || obtenerPrecioPorTipo(item.tipoPlato);
+      if (item.tipoPlato === 'Solo Sopa') {
+        const descSopa = sopaHoy.value ? `Sopa del Día (${sopaHoy.value})` : 'Sopa del Día';
+        return {
+          descripcion: descSopa,
+          cantidad: Number(item.cantidad),
+          precioUnitario: precioItem,
+          subtotal: Number(item.cantidad) * precioItem,
+          idOpcionMenu: undefined,
+          tipoPlato: 'Solo Sopa',
+        };
+      }
+      const opc = todasLasOpciones.value.find((o) => o.id === item.idOpcionMenu);
+      const nombre = opc?.nombreSegundo || 'Almuerzo del Día';
       return {
         descripcion: `${nombre} (${item.tipoPlato || 'Completo'})`,
         cantidad: Number(item.cantidad),

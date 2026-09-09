@@ -187,9 +187,20 @@ const guardarVenta = async () => {
   errorMensajeVenta.value = '';
 
   const itemsParaComprobante = platosVentaForm.value.map((item) => {
-    const opc = todasLasOpcionesMenu.value.find((o) => o.id === item.idOpcionMenu);
-    const nombre = opc?.nombreSegundo || (item.tipoPlato === 'Solo Sopa' ? 'Sopa del Día' : 'Almuerzo del Día');
     const precioItem = Number(item.precioUnitario) || obtenerPrecioPorTipo(item.tipoPlato);
+    if (item.tipoPlato === 'Solo Sopa') {
+      const descSopa = menuHoy.value?.sopa ? `Sopa del Día (${menuHoy.value.sopa})` : 'Sopa del Día';
+      return {
+        descripcion: descSopa,
+        cantidad: Number(item.cantidad),
+        precioUnitario: precioItem,
+        subtotal: Number(item.cantidad) * precioItem,
+        idOpcionMenu: undefined,
+        tipoPlato: 'Solo Sopa',
+      };
+    }
+    const opc = todasLasOpcionesMenu.value.find((o) => o.id === item.idOpcionMenu);
+    const nombre = opc?.nombreSegundo || 'Almuerzo del Día';
     return {
       descripcion: `${nombre} (${item.tipoPlato || 'Completo'})`,
       cantidad: Number(item.cantidad),

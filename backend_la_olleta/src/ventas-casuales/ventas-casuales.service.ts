@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -27,6 +27,64 @@ export class VentasCasualesService {
 
     // Caso A: Venta con múltiples ítems en una sola factura
     if (items && Array.isArray(items) && items.length > 0) {
+      // 1. Validar disponibilidad de stock antes de cualquier descuento
+      let totalSopasRequeridas = 0;
+      for (const it of items) {
+        const cant = Number(it.cantidad) || 1;
+        const tipo = it.tipoPlato || 'Completo';
+
+        if (it.idOpcionMenu && (tipo === 'Completo' || tipo === 'Solo Segundo')) {
+          const opc = await this.opcionMenuRepository.findOne({ where: { id: it.idOpcionMenu } });
+          if (
+            opc &&
+            opc.cantidadInicial !== null &&
+            opc.cantidadInicial !== undefined &&
+            opc.cantidadInicial > 0
+          ) {
+            const disp = opc.cantidadDisponible ?? 0;
+            if (disp <= 0) {
+              throw new BadRequestException(
+                `El plato "${opc.nombreSegundo}" ya está AGOTADO. No es posible realizar la venta.`,
+              );
+            }
+            if (disp < cant) {
+              throw new BadRequestException(
+                `No hay suficientes raciones de "${opc.nombreSegundo}". Disponibles: ${disp}, Solicitadas: ${cant}.`,
+              );
+            }
+          }
+        }
+
+        if (tipo === 'Completo' || tipo === 'Solo Sopa') {
+          totalSopasRequeridas += cant;
+        }
+      }
+
+      if (totalSopasRequeridas > 0) {
+        const menuFecha = await this.menuRepository.findOne({
+          where: { fecha: fechaLimpia as any },
+        });
+        if (
+          menuFecha &&
+          menuFecha.cantidadSopaInicial !== null &&
+          menuFecha.cantidadSopaInicial !== undefined &&
+          menuFecha.cantidadSopaInicial > 0
+        ) {
+          const dispSopa = menuFecha.cantidadSopaDisponible ?? 0;
+          if (dispSopa <= 0) {
+            throw new BadRequestException(
+              `La sopa del día (${menuFecha.sopa || 'del menú'}) ya está AGOTADA.`,
+            );
+          }
+          if (dispSopa < totalSopasRequeridas) {
+            throw new BadRequestException(
+              `No hay suficientes raciones de Sopa (${menuFecha.sopa || 'del día'}). Disponibles: ${dispSopa}, Solicitadas: ${totalSopasRequeridas}.`,
+            );
+          }
+        }
+      }
+
+      // 2. Realizar descuentos de stock una vez validado todo
       for (const it of items) {
         const cant = Number(it.cantidad) || 1;
         const tipo = it.tipoPlato || 'Completo';
@@ -80,19 +138,63 @@ export class VentasCasualesService {
         opcionMenu = encontrada;
         if (
           (tipo === 'Completo' || tipo === 'Solo Segundo') &&
-          opcionMenu.cantidadDisponible !== null &&
-          opcionMenu.cantidadDisponible !== undefined
+          opcionMenu.cantidadInicial !== null &&
+          opcionMenu.cantidadInicial !== undefined &&
+          opcionMenu.cantidadInicial > 0
         ) {
-          opcionMenu.cantidadDisponible = Math.max(
-            0,
-            opcionMenu.cantidadDisponible - createVentasCasualeDto.cantidadCompletos,
-          );
-          await this.opcionMenuRepository.save(opcionMenu);
+          const disp = opcionMenu.cantidadDisponible ?? 0;
+          if (disp <= 0) {
+            throw new BadRequestException(
+              `El plato "${opcionMenu.nombreSegundo}" ya está AGOTADO.`,
+            );
+          }
+          if (disp < createVentasCasualeDto.cantidadCompletos) {
+            throw new BadRequestException(
+              `No hay suficientes raciones de "${opcionMenu.nombreSegundo}". Disponibles: ${disp}, Solicitadas: ${createVentasCasualeDto.cantidadCompletos}.`,
+            );
+          }
         }
       }
     }
 
     // Descontar Sopa si aplica
+    if (tipo === 'Completo' || tipo === 'Solo Sopa') {
+      const menuFecha = await this.menuRepository.findOne({
+        where: { fecha: fechaLimpia as any },
+      });
+      if (
+        menuFecha &&
+        menuFecha.cantidadSopaInicial !== null &&
+        menuFecha.cantidadSopaInicial !== undefined &&
+        menuFecha.cantidadSopaInicial > 0
+      ) {
+        const dispSopa = menuFecha.cantidadSopaDisponible ?? 0;
+        if (dispSopa <= 0) {
+          throw new BadRequestException(
+            `La sopa del día (${menuFecha.sopa || 'del menú'}) ya está AGOTADA.`,
+          );
+        }
+        if (dispSopa < createVentasCasualeDto.cantidadCompletos) {
+          throw new BadRequestException(
+            `No hay suficientes raciones de Sopa (${menuFecha.sopa || 'del día'}). Disponibles: ${dispSopa}, Solicitadas: ${createVentasCasualeDto.cantidadCompletos}.`,
+          );
+        }
+      }
+    }
+
+    if (
+      opcionMenu &&
+      (tipo === 'Completo' || tipo === 'Solo Segundo') &&
+      opcionMenu.cantidadDisponible !== null &&
+      opcionMenu.cantidadDisponible !== undefined
+    ) {
+      opcionMenu.cantidadDisponible = Math.max(
+        0,
+        opcionMenu.cantidadDisponible - createVentasCasualeDto.cantidadCompletos,
+      );
+      await this.opcionMenuRepository.save(opcionMenu);
+    }
+
     if (tipo === 'Completo' || tipo === 'Solo Sopa') {
       const menuFecha = await this.menuRepository.findOne({
         where: { fecha: fechaLimpia as any },
@@ -203,7 +305,8 @@ export class VentasCasualesService {
             if (it.idOpcionMenu && (tipo === 'Completo' || tipo === 'Solo Segundo')) {
               const opc = await this.opcionMenuRepository.findOne({ where: { id: it.idOpcionMenu } });
               if (opc && opc.cantidadDisponible !== null && opc.cantidadDisponible !== undefined) {
-                opc.cantidadDisponible += cant;
+                const maxOpc = opc.cantidadInicial && opc.cantidadInicial > 0 ? opc.cantidadInicial : Infinity;
+                opc.cantidadDisponible = Math.min(maxOpc, opc.cantidadDisponible + cant);
                 await this.opcionMenuRepository.save(opc);
               }
             }
@@ -211,7 +314,8 @@ export class VentasCasualesService {
             if (tipo === 'Completo' || tipo === 'Solo Sopa') {
               const menuFecha = await this.menuRepository.findOne({ where: { fecha: fechaLimpia as any } });
               if (menuFecha && menuFecha.cantidadSopaDisponible !== null && menuFecha.cantidadSopaDisponible !== undefined) {
-                menuFecha.cantidadSopaDisponible += cant;
+                const maxSopa = menuFecha.cantidadSopaInicial && menuFecha.cantidadSopaInicial > 0 ? menuFecha.cantidadSopaInicial : Infinity;
+                menuFecha.cantidadSopaDisponible = Math.min(maxSopa, menuFecha.cantidadSopaDisponible + cant);
                 await this.menuRepository.save(menuFecha);
               }
             }
@@ -221,13 +325,13 @@ export class VentasCasualesService {
         // Fallback
       }
     } else {
-      if (
-        venta.opcionMenu &&
-        venta.opcionMenu.cantidadDisponible !== null &&
-        venta.opcionMenu.cantidadDisponible !== undefined
-      ) {
-        venta.opcionMenu.cantidadDisponible += venta.cantidadCompletos;
-        await this.opcionMenuRepository.save(venta.opcionMenu);
+      if (venta.opcionMenu) {
+        const opc = await this.opcionMenuRepository.findOne({ where: { id: venta.opcionMenu.id } });
+        if (opc && opc.cantidadDisponible !== null && opc.cantidadDisponible !== undefined) {
+          const maxOpc = opc.cantidadInicial && opc.cantidadInicial > 0 ? opc.cantidadInicial : Infinity;
+          opc.cantidadDisponible = Math.min(maxOpc, opc.cantidadDisponible + venta.cantidadCompletos);
+          await this.opcionMenuRepository.save(opc);
+        }
       }
 
       const tipo = venta.tipoPlato || 'Completo';
@@ -236,7 +340,8 @@ export class VentasCasualesService {
           where: { fecha: fechaLimpia as any },
         });
         if (menuFecha && menuFecha.cantidadSopaDisponible !== null && menuFecha.cantidadSopaDisponible !== undefined) {
-          menuFecha.cantidadSopaDisponible += venta.cantidadCompletos;
+          const maxSopa = menuFecha.cantidadSopaInicial && menuFecha.cantidadSopaInicial > 0 ? menuFecha.cantidadSopaInicial : Infinity;
+          menuFecha.cantidadSopaDisponible = Math.min(maxSopa, menuFecha.cantidadSopaDisponible + venta.cantidadCompletos);
           await this.menuRepository.save(menuFecha);
         }
       }

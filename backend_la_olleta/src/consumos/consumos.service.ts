@@ -73,6 +73,16 @@ export class ConsumosService {
       opcionMenu.cantidadDisponible !== null &&
       opcionMenu.cantidadDisponible !== undefined
     ) {
+      if (
+        opcionMenu.cantidadInicial !== null &&
+        opcionMenu.cantidadInicial !== undefined &&
+        opcionMenu.cantidadInicial > 0 &&
+        opcionMenu.cantidadDisponible < createConsumoDto.cantidadCompletos
+      ) {
+        throw new BadRequestException(
+          `No hay suficientes raciones disponibles de "${opcionMenu.nombreSegundo}" (Quedan: ${opcionMenu.cantidadDisponible}).`,
+        );
+      }
       opcionMenu.cantidadDisponible = Math.max(
         0,
         opcionMenu.cantidadDisponible - createConsumoDto.cantidadCompletos,
@@ -90,6 +100,16 @@ export class ConsumosService {
         menuFecha.cantidadSopaDisponible !== null &&
         menuFecha.cantidadSopaDisponible !== undefined
       ) {
+        if (
+          menuFecha.cantidadSopaInicial !== null &&
+          menuFecha.cantidadSopaInicial !== undefined &&
+          menuFecha.cantidadSopaInicial > 0 &&
+          menuFecha.cantidadSopaDisponible < createConsumoDto.cantidadCompletos
+        ) {
+          throw new BadRequestException(
+            `No hay suficientes raciones de Sopa (${menuFecha.sopa || 'del día'}) disponibles (Quedan: ${menuFecha.cantidadSopaDisponible}).`,
+          );
+        }
         menuFecha.cantidadSopaDisponible = Math.max(
           0,
           menuFecha.cantidadSopaDisponible - createConsumoDto.cantidadCompletos,
@@ -250,9 +270,19 @@ export class ConsumosService {
 
     await this.pensionRepository.save(consumo.pension);
 
-    if (consumo.opcionMenu && consumo.opcionMenu.cantidadDisponible !== null && consumo.opcionMenu.cantidadDisponible !== undefined) {
-      consumo.opcionMenu.cantidadDisponible += consumo.cantidadCompletos;
-      await this.opcionMenuRepository.save(consumo.opcionMenu);
+    if (consumo.opcionMenu) {
+      const opcActual = await this.opcionMenuRepository.findOne({ where: { id: consumo.opcionMenu.id } });
+      if (opcActual && opcActual.cantidadDisponible !== null && opcActual.cantidadDisponible !== undefined) {
+        const limiteInicial =
+          opcActual.cantidadInicial !== null && opcActual.cantidadInicial !== undefined && opcActual.cantidadInicial > 0
+            ? opcActual.cantidadInicial
+            : Infinity;
+        opcActual.cantidadDisponible = Math.min(
+          limiteInicial,
+          opcActual.cantidadDisponible + consumo.cantidadCompletos,
+        );
+        await this.opcionMenuRepository.save(opcActual);
+      }
     }
 
     const tipo = consumo.tipoPlato || 'Completo';
@@ -264,7 +294,14 @@ export class ConsumosService {
         where: { fecha: fechaLimpia as any },
       });
       if (menuFecha && menuFecha.cantidadSopaDisponible !== null && menuFecha.cantidadSopaDisponible !== undefined) {
-        menuFecha.cantidadSopaDisponible += consumo.cantidadCompletos;
+        const limiteSopa =
+          menuFecha.cantidadSopaInicial !== null && menuFecha.cantidadSopaInicial !== undefined && menuFecha.cantidadSopaInicial > 0
+            ? menuFecha.cantidadSopaInicial
+            : Infinity;
+        menuFecha.cantidadSopaDisponible = Math.min(
+          limiteSopa,
+          menuFecha.cantidadSopaDisponible + consumo.cantidadCompletos,
+        );
         await this.menuRepository.save(menuFecha);
       }
     }

@@ -305,6 +305,7 @@ export class WhatsappService implements OnModuleInit {
     // 2. Detectar si pide explícitamente solo segundo, solo sopa o completo
     const pideSoloSegundo = /sin\s*sopas?|solo\s*segundos?|solamente\s*segundos?/i.test(rawLower);
     const pideSoloSopaExp = /solo\s*(?:\d+\s*)?sopas?|solamente\s*(?:\d+\s*)?sopas?|(\d+)\s*solo\s*sopas?/i.test(rawLower);
+    const pideConSopa = /con\s*sopas?|con\s*(?:el\s*)?caldito|\bcon\s*caldo\b|\bcompletos?\b|\+\s*sopas?|\by\s*sopas?|\be\s*sopas?/i.test(rawLower);
 
     // Extraer cantidad de sopas mencionadas si las hay (ej. "15 sopas", "2 sopas", "sopa")
     const matchCantSopa = rawLower.match(/(\d+)\s*(?:de\s+)?sopas?/i);
@@ -437,27 +438,30 @@ export class WhatsappService implements OnModuleInit {
 
     const totalCantidad = items.reduce((sum, item) => sum + item.cantidad, 0);
 
-    if (pideSoloSegundo) {
+    // Si pide explícitamente con sopa o almuerzo completo (y no especificó sin sopa)
+    const incluyeSopa = !pideSoloSegundo && (pideConSopa || (cantidadSopasDetectada > 0 && rawLower.includes('sopa')));
+
+    if (incluyeSopa) {
+      const descSopa = nombreSopaMenu ? `Sí (${nombreSopaMenu})` : 'Sí (Completo con Sopa)';
       return {
         items,
         totalCantidad,
-        tieneSopa: false,
-        tipoPlato: 'Solo Segundo',
-        observacionSopas: 'No (Solo Segundo)',
+        tieneSopa: true,
+        tipoPlato: 'Completo',
+        observacionSopas: cantidadSopasDetectada > 0 && cantidadSopasDetectada !== totalCantidad
+          ? `${cantidadSopasDetectada}x ${nombreSopaMenu || 'Sopa del día'}`
+          : descSopa,
         faltaEspecificarSegundo: false,
       };
     }
 
-    // Por defecto para pedidos con segundo: Almuerzo Completo (Sopa + Segundo)
-    const descSopa = nombreSopaMenu ? `Sí (${nombreSopaMenu})` : 'Sí (Completo con Sopa)';
+    // Por defecto si solo especificó segundo (ej: "#pedido 1", "#pedido Milanesa", "#pedido 2 saice"):
     return {
       items,
       totalCantidad,
-      tieneSopa: true,
-      tipoPlato: 'Completo',
-      observacionSopas: cantidadSopasDetectada > 0 && cantidadSopasDetectada !== totalCantidad
-        ? `${cantidadSopasDetectada}x ${nombreSopaMenu || 'Sopa del día'}`
-        : descSopa,
+      tieneSopa: false,
+      tipoPlato: 'Solo Segundo',
+      observacionSopas: 'No (Solo Segundo)',
       faltaEspecificarSegundo: false,
     };
   }
@@ -654,6 +658,115 @@ Por favor ajusta la cantidad o renueva tu plan en administración.
         mentions: [mentionJid],
       });
       return;
+    }
+
+    // 5.1. Validar disponibilidad de raciones (stock en vivo de platos y sopa)
+    const menuActual = menu
+      ? await this.menuRepository.findOne({
+          where: { id: menu.id },
+          relations: { opcionesMenu: true },
+        })
+      : null;
+
+    const opcionesFrescas = menuActual?.opcionesMenu || [];
+
+    // Validar raciones de cada segundo solicitado
+    for (const item of parseResult.items) {
+      const opcFresca = opcionesFrescas.find((o) => o.id === item.opcionMenu.id);
+      if (
+        opcFresca &&
+        opcFresca.cantidadInicial !== null &&
+        opcFresca.cantidadInicial !== undefined &&
+        opcFresca.cantidadInicial > 0
+      ) {
+        const disp =
+          opcFresca.cantidadDisponible !== null && opcFresca.cantidadDisponible !== undefined
+            ? opcFresca.cantidadDisponible
+            : 0;
+
+        if (disp <= 0) {
+          const otrasDisponibles = opcionesFrescas
+            .filter(
+              (o) =>
+                o.id !== opcFresca.id &&
+                (o.cantidadDisponible === null ||
+                  o.cantidadDisponible === undefined ||
+                  o.cantidadDisponible > 0),
+            )
+            .map((o, idx) => `  • *${idx + 1}.* ${o.nombreSegundo} (${o.cantidadDisponible ?? 'Disp.'} disp.)`)
+            .join('\n');
+
+          await this.sock?.sendMessage(remoteJid, {
+            text:
+`⚠️ *L'OLLETA - PLATO AGOTADO*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, lamentamos informarte que el plato:
+❌ *${opcFresca.nombreSegundo}* ya está *AGOTADO*.
+
+${otrasDisponibles ? `🍽️ *Opciones aún disponibles hoy:*\n${otrasDisponibles}\n\n👉 Por favor envía tu pedido eligiendo otra opción.` : 'Por favor consulta con administración.'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            mentions: [mentionJid],
+          });
+          return;
+        }
+
+        if (disp < item.cantidad) {
+          await this.sock?.sendMessage(remoteJid, {
+            text:
+`⚠️ *L'OLLETA - RACIONES INSUFICIENTES*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, solo quedan *${disp} ración(es)* disponible(s) de *${opcFresca.nombreSegundo}* (solicitaste ${item.cantidad}).
+
+Por favor ajusta la cantidad o pide otro plato disponible.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            mentions: [mentionJid],
+          });
+          return;
+        }
+      }
+    }
+
+    // Validar raciones de sopa si el pedido incluye sopa
+    if (
+      parseResult.tieneSopa &&
+      menuActual &&
+      menuActual.cantidadSopaInicial !== null &&
+      menuActual.cantidadSopaInicial !== undefined &&
+      menuActual.cantidadSopaInicial > 0
+    ) {
+      const sopaDisp =
+        menuActual.cantidadSopaDisponible !== null && menuActual.cantidadSopaDisponible !== undefined
+          ? menuActual.cantidadSopaDisponible
+          : 0;
+
+      if (sopaDisp <= 0) {
+        await this.sock?.sendMessage(remoteJid, {
+          text:
+`⚠️ *L'OLLETA - SOPA AGOTADA*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, la sopa del día (*${menuActual.sopa || 'Sopa'}*) ya está *AGOTADA*.
+
+Puedes pedir tu plato como *Solo Segundo* sin sopa:
+👉 Ejemplo: \`#pedido ${parseResult.items[0]?.opcionMenu.nombreSegundo || '1'}\`
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          mentions: [mentionJid],
+        });
+        return;
+      }
+
+      if (sopaDisp < parseResult.totalCantidad) {
+        await this.sock?.sendMessage(remoteJid, {
+          text:
+`⚠️ *L'OLLETA - RACIONES DE SOPA INSUFICIENTES*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Hola *${pensionado.nombreCompleto}*, solo quedan *${sopaDisp} ración(es)* de sopa disponibles (solicitaste ${parseResult.totalCantidad}).
+
+Por favor ajusta la cantidad o pide tu almuerzo como *Solo Segundo*.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          mentions: [mentionJid],
+        });
+        return;
+      }
     }
 
     // 6. Registrar Consumos en la Base de Datos

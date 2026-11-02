@@ -124,7 +124,7 @@ const login = async () => {
       <!-- Footer Info -->
       <div class="login-footer">
         <i class="pi pi-shield" style="font-size: 0.75rem;"></i>
-        <span>Plataforma Segura · Versión Monografía 2026</span>
+        <span>Plataforma Segura · Versión 1.0</span>
       </div>
     </div>
   </div>

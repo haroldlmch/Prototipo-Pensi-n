@@ -140,7 +140,7 @@ onUnmounted(() => {
             <div class="user-avatar">A</div>
             <div class="user-info">
               <span class="user-name">Administrador</span>
-              <span class="user-role">Caja Central</span>
+              
             </div>
           </div>
         </div>

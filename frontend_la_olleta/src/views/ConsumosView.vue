@@ -548,7 +548,7 @@ onMounted(() => {
         <div style="display: flex; align-items: center; gap: 0.6rem;">
           <i class="pi pi-bolt" style="color: #ea580c; font-size: 1.25rem;"></i>
           <h2 style="margin: 0; font-size: 1.2rem; font-weight: 800; color: #1c1917;">
-            Marcación Rápida de Comedor (1-Clic)
+            Marcación Rápida de Comedor
           </h2>
         </div>
         <span style="font-size: 0.85rem; color: #78716c; font-weight: 600;">

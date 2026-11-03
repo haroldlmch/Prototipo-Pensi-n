@@ -22,7 +22,7 @@ const secciones = [
   {
     titulo: 'PRINCIPAL',
     items: [
-      { label: 'Dashboard', ruta: '/dashboard', icono: 'pi pi-objects-column' },
+      { label: 'Panel de Control', ruta: '/dashboard', icono: 'pi pi-objects-column' },
     ],
   },
   {
